@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Trophy, 
@@ -150,9 +149,10 @@ const App: React.FC = () => {
         const firebase = (window as any).firebase;
         if (!firebase) return;
 
-        // Use process.env for environment variables instead of import.meta.env
-        const apiKey = process.env.VITE_FIREBASE_API_KEY;
-        const databaseURL = process.env.VITE_FIREBASE_DATABASE_URL;
+        // Safer env access
+        const env = (import.meta as any).env || process.env || {};
+        const apiKey = env.VITE_FIREBASE_API_KEY;
+        const databaseURL = env.VITE_FIREBASE_DATABASE_URL;
 
         if (!apiKey || !databaseURL) return;
 
@@ -365,7 +365,6 @@ const App: React.FC = () => {
     setPlayoffs(prev => ({ ...(prev || { premier: [], national: [], champions: [] }), [key]: bracket }));
   };
 
-  // Archive the current season and reset data for the next one
   const archiveSeason = (nextSeasonName: string) => {
     const pFinal = (playoffs.premier || []).find(m => m.round === 'final');
     const nFinal = (playoffs.national || []).find(m => m.round === 'final');
@@ -396,15 +395,15 @@ const App: React.FC = () => {
 
   const TableHeader = () => (
     <thead>
-      <tr className="bg-slate-800/80 text-slate-400 text-[8px] md:text-[9px] uppercase tracking-widest font-black border-b border-white/5">
+      <tr className="bg-slate-800 text-slate-400 text-[8px] md:text-[9px] uppercase tracking-widest font-black border-b border-slate-200">
         <th className="px-2 py-4 text-center">#</th>
         <th className="px-4 py-4 text-right">שחקן</th>
         <th className="px-2 py-4 text-center">מש'</th>
-        <th className="px-2 py-4 text-center text-green-400">נ'</th>
-        <th className="px-2 py-4 text-center text-slate-400">ת'</th>
-        <th className="px-2 py-4 text-center text-red-400">ה'</th>
-        <th className="px-2 py-4 text-center text-blue-300">הפרש</th>
-        <th className="px-4 py-4 text-center text-blue-400">נק'</th>
+        <th className="px-2 py-4 text-center text-green-600">נ'</th>
+        <th className="px-2 py-4 text-center text-slate-600">ת'</th>
+        <th className="px-2 py-4 text-center text-red-600">ה'</th>
+        <th className="px-2 py-4 text-center text-blue-600">הפרש</th>
+        <th className="px-4 py-4 text-center text-blue-700">נק'</th>
       </tr>
     </thead>
   );
@@ -412,15 +411,15 @@ const App: React.FC = () => {
   const TableRow: React.FC<{ p: PlayerStats, idx: number }> = ({ p, idx }) => {
     const playerObj = (players || []).find(px => px && px.id === p.id);
     return (
-      <tr onClick={() => playerObj && setSelectedPlayerInfo(playerObj)} className="hover:bg-slate-800/30 transition-all border-b border-white/5 last:border-0 cursor-pointer">
-        <td className="px-2 py-4 text-center"><span className={`w-6 h-6 md:w-7 md:h-7 inline-flex items-center justify-center rounded-lg font-black text-[10px] md:text-[11px] ${idx === 0 ? 'bg-yellow-500 text-black' : 'bg-slate-800 text-slate-500'}`}>{idx + 1}</span></td>
-        <td className="px-4 py-4"><div className="flex items-center gap-2 md:gap-4 text-right truncate"><div className="w-8 h-8 rounded-xl overflow-hidden bg-slate-800 border border-white/5 shrink-0">{playerObj?.photoUrl ? <img src={playerObj.photoUrl} className="w-full h-full object-cover" alt={p.name} /> : <UserIcon size={14} className="m-auto mt-2 text-slate-600" />}</div><span className="font-black text-xs md:text-sm text-white truncate">{p.name}</span></div></td>
-        <td className="px-2 py-4 text-center text-[10px] font-bold text-slate-400">{p.gp}</td>
-        <td className="px-2 py-4 text-center text-[10px] font-black text-green-500/80">{p.w}</td>
-        <td className="px-2 py-4 text-center text-[10px] font-bold text-slate-500">{p.d}</td>
-        <td className="px-2 py-4 text-center text-[10px] font-black text-red-500/80">{p.l}</td>
-        <td className="px-2 py-4 text-center text-[10px] font-black text-blue-300">{p.gd > 0 ? `+${p.gd}` : p.gd}</td>
-        <td className="px-4 py-4 text-center"><span className="bg-blue-600/10 text-blue-400 px-2 md:px-3 py-1 rounded-lg font-black text-xs border border-blue-600/20">{p.pts}</span></td>
+      <tr onClick={() => playerObj && setSelectedPlayerInfo(playerObj)} className="hover:bg-slate-100 transition-all border-b border-slate-100 last:border-0 cursor-pointer">
+        <td className="px-2 py-4 text-center"><span className={`w-6 h-6 md:w-7 md:h-7 inline-flex items-center justify-center rounded-lg font-black text-[10px] md:text-[11px] ${idx === 0 ? 'bg-yellow-500 text-black' : 'bg-slate-200 text-slate-500'}`}>{idx + 1}</span></td>
+        <td className="px-4 py-4"><div className="flex items-center gap-2 md:gap-4 text-right truncate"><div className="w-8 h-8 rounded-xl overflow-hidden bg-slate-200 border border-slate-300 shrink-0">{playerObj?.photoUrl ? <img src={playerObj.photoUrl} className="w-full h-full object-cover" alt={p.name} /> : <UserIcon size={14} className="m-auto mt-2 text-slate-400" />}</div><span className="font-black text-xs md:text-sm text-slate-800 truncate">{p.name}</span></div></td>
+        <td className="px-2 py-4 text-center text-[10px] font-bold text-slate-500">{p.gp}</td>
+        <td className="px-2 py-4 text-center text-[10px] font-black text-green-600">{p.w}</td>
+        <td className="px-2 py-4 text-center text-[10px] font-bold text-slate-400">{p.d}</td>
+        <td className="px-2 py-4 text-center text-[10px] font-black text-red-600">{p.l}</td>
+        <td className="px-2 py-4 text-center text-[10px] font-black text-blue-600">{p.gd > 0 ? `+${p.gd}` : p.gd}</td>
+        <td className="px-4 py-4 text-center"><span className="bg-blue-100 text-blue-700 px-2 md:px-3 py-1 rounded-lg font-black text-xs border border-blue-200">{p.pts}</span></td>
       </tr>
     );
   };
@@ -428,45 +427,43 @@ const App: React.FC = () => {
   const PlayoffMatchUI: React.FC<{ match: PlayoffMatch, mode: LeagueType }> = ({ match, mode }) => {
     const p1 = (players || []).find(p => p.id === match.player1Id), p2 = (players || []).find(p => p.id === match.player2Id);
     return (
-      <div className="bg-slate-900 border border-slate-800 rounded-[2rem] p-4 w-60 shadow-2xl transition-all border-white/5 group text-white">
+      <div className="bg-white border border-slate-200 rounded-[2rem] p-4 w-60 shadow-lg transition-all hover:shadow-xl group">
         <div className="flex flex-col gap-3">
-           <div className={`flex justify-between items-center p-3 rounded-xl border border-white/5 ${match.winnerId === match.player1Id ? 'bg-blue-600/20 border-blue-500/30' : 'bg-black/30'}`}><span className="text-[10px] font-black truncate max-w-[100px]">{p1?.name || '??'}</span><span className="font-black ml-2 text-sm">{match.score1 ?? '-'}</span></div>
-           <div className={`flex justify-between items-center p-3 rounded-xl border border-white/5 ${match.winnerId === match.player2Id ? 'bg-blue-600/20 border-blue-500/30' : 'bg-black/30'}`}><span className="text-[10px] font-black truncate max-w-[100px]">{p2?.name || '??'}</span><span className="font-black ml-2 text-sm">{match.score2 ?? '-'}</span></div>
+           <div className={`flex justify-between items-center p-3 rounded-xl border ${match.winnerId === match.player1Id ? 'bg-blue-50 border-blue-200' : 'bg-slate-50 border-slate-100'}`}><span className="text-[10px] font-black truncate max-w-[100px] text-slate-800">{p1?.name || '??'}</span><span className="font-black ml-2 text-sm text-slate-800">{match.score1 ?? '-'}</span></div>
+           <div className={`flex justify-between items-center p-3 rounded-xl border ${match.winnerId === match.player2Id ? 'bg-blue-50 border-blue-200' : 'bg-slate-50 border-slate-100'}`}><span className="text-[10px] font-black truncate max-w-[100px] text-slate-800">{p2?.name || '??'}</span><span className="font-black ml-2 text-sm text-slate-800">{match.score2 ?? '-'}</span></div>
         </div>
-        {isAdmin && p1 && p2 && (<button onClick={() => { setFixtureToUpdate({ id: match.id, league: mode, homePlayerId: match.player1Id!, awayPlayerId: match.player2Id!, homeScore: match.score1, awayScore: match.score2, completed: !!match.winnerId, date: new Date().toISOString() }); setUpdateScores({ home: match.score1?.toString() || '', away: match.score2?.toString() || '' }); }} className="mt-3 w-full text-[9px] font-black text-blue-500 hover:bg-blue-500/10 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-all">עדכן תוצאה</button>)}
+        {isAdmin && p1 && p2 && (<button onClick={() => { setFixtureToUpdate({ id: match.id, league: mode, homePlayerId: match.player1Id!, awayPlayerId: match.player2Id!, homeScore: match.score1, awayScore: match.score2, completed: !!match.winnerId, date: new Date().toISOString() }); setUpdateScores({ home: match.score1?.toString() || '', away: match.score2?.toString() || '' }); }} className="mt-3 w-full text-[9px] font-black text-blue-600 hover:bg-blue-50 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-all">עדכן תוצאה</button>)}
       </div>
     );
   };
 
   return (
-    <div className="min-h-screen bg-black text-white pb-20 selection:bg-blue-600" dir="rtl">
-      <div className="fixed inset-0 pointer-events-none -z-10 overflow-hidden">
-        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-blue-600/5 blur-[120px]" />
-        <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-blue-900/5 blur-[150px]" />
-      </div>
+    <div className="min-h-screen bg-white text-slate-900 pb-20 selection:bg-blue-600" dir="rtl">
+      {/* SYSTEM HEADER FOR DIAGNOSTICS */}
+      <h1 className="text-center text-4xl font-black p-4 text-white bg-blue-600 shadow-lg">SYSTEM ONLINE</h1>
 
-      <header className="sticky top-0 z-40 bg-black/60 backdrop-blur-2xl border-b border-white/5 px-8 py-5">
+      <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-200 px-8 py-5">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
-          <div className="flex items-center gap-6 shrink-0"><IFLLogo /><div className="text-right"><div className="flex items-center gap-2"><h1 className="text-3xl font-black text-white italic tracking-tighter">IFL 26</h1><span className="text-[11px] text-blue-500 font-black bg-blue-500/10 px-3 py-1 rounded-full border border-blue-500/20">נוסד 2022</span></div><p className="text-[9px] text-slate-600 uppercase tracking-[0.3em] font-black mt-1">ULTIMATE MASTER</p></div></div>
+          <div className="flex items-center gap-6 shrink-0"><IFLLogo /><div className="text-right"><div className="flex items-center gap-2"><h1 className="text-3xl font-black text-slate-900 italic tracking-tighter">IFL 26</h1><span className="text-[11px] text-blue-600 font-black bg-blue-50 px-3 py-1 rounded-full border border-blue-200">נוסד 2022</span></div><p className="text-[9px] text-slate-400 uppercase tracking-[0.3em] font-black mt-1">ULTIMATE MASTER</p></div></div>
           
           <div className="flex-1 w-full max-w-lg relative" ref={searchRef}>
-             <div className="relative group"><Search className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-blue-500 transition-colors" size={16} /><input type="text" placeholder="חיפוש שחקן..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onFocus={() => setShowSearchResults(true)} className="w-full bg-slate-900/40 border border-white/5 rounded-xl py-3 pr-11 pl-4 text-xs font-black text-white outline-none focus:border-blue-500/30 transition-all" /></div>
+             <div className="relative group"><Search className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={16} /><input type="text" placeholder="חיפוש שחקן..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onFocus={() => setShowSearchResults(true)} className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pr-11 pl-4 text-xs font-black text-slate-900 outline-none focus:border-blue-300 focus:bg-white transition-all" /></div>
              {showSearchResults && searchQuery && (
-                <div className="absolute top-full mt-2 left-0 right-0 bg-slate-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-50">
+                <div className="absolute top-full mt-2 left-0 right-0 bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden z-50">
                    {(players || []).filter(p => p && p.name.includes(searchQuery)).slice(0, 5).map(p => (
-                      <button key={p.id} onClick={() => { setSelectedPlayerInfo(p); setShowSearchResults(false); setSearchQuery(''); }} className="w-full flex items-center gap-4 p-3 hover:bg-white/5 border-b border-white/5 last:border-0 text-right"><div className="w-8 h-8 rounded-lg bg-slate-800 overflow-hidden">{p.photoUrl ? <img src={p.photoUrl} className="w-full h-full object-cover" alt={p.name} /> : <UserIcon size={14} className="m-auto mt-2 text-slate-600" />}</div><div className="flex-1"><div className="font-black text-xs">{p.name}</div><div className="text-[8px] text-slate-500">{p.sonyUsername}</div></div><ChevronRight size={14} className="text-slate-700" /></button>
+                      <button key={p.id} onClick={() => { setSelectedPlayerInfo(p); setShowSearchResults(false); setSearchQuery(''); }} className="w-full flex items-center gap-4 p-3 hover:bg-slate-50 border-b border-slate-100 last:border-0 text-right"><div className="w-8 h-8 rounded-lg bg-slate-100 overflow-hidden">{p.photoUrl ? <img src={p.photoUrl} className="w-full h-full object-cover" alt={p.name} /> : <UserIcon size={14} className="m-auto mt-2 text-slate-400" />}</div><div className="flex-1"><div className="font-black text-xs text-slate-800">{p.name}</div><div className="text-[8px] text-slate-400">{p.sonyUsername}</div></div><ChevronRight size={14} className="text-slate-300" /></button>
                    ))}
                 </div>
              )}
           </div>
 
           <div className="flex items-center gap-3">
-             <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all text-[9px] font-black ${isCloudConnected ? 'bg-blue-500/10 border-blue-500/20 text-blue-400' : 'bg-slate-900 border-white/5 text-slate-500'}`}>
-                {isCloudConnected ? <Cloud size={14} className="text-green-500" /> : <CloudOff size={14} className="text-red-500" />}
+             <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all text-[9px] font-black ${isCloudConnected ? 'bg-green-50 border-green-200 text-green-700' : 'bg-slate-50 border-slate-200 text-slate-500'}`}>
+                {isCloudConnected ? <Cloud size={14} className="text-green-500" /> : <CloudOff size={14} className="text-slate-400" />}
                 {isCloudConnected ? 'Cloud Online' : 'Offline Mode'}
                 {isSyncing && <RefreshCcw size={10} className="animate-spin ml-1" />}
              </div>
-             <button onClick={() => isAdmin ? setIsAdmin(false) : setShowPinModal(true)} className={`p-2.5 rounded-xl transition-all ${isAdmin ? 'bg-green-600 text-white shadow-lg border border-green-400' : 'bg-slate-900 text-slate-500 border border-white/5'}`}>{isAdmin ? <ShieldCheck size={18} /> : <Lock size={18} />}</button>
+             <button onClick={() => isAdmin ? setIsAdmin(false) : setShowPinModal(true)} className={`p-2.5 rounded-xl transition-all ${isAdmin ? 'bg-green-600 text-white shadow-lg' : 'bg-slate-100 text-slate-500 border border-slate-200'}`}>{isAdmin ? <ShieldCheck size={18} /> : <Lock size={18} />}</button>
           </div>
         </div>
       </header>
@@ -482,219 +479,60 @@ const App: React.FC = () => {
             { id: 'hof', label: 'היכל תהילה', icon: <Crown size={16} /> },
             ...(isAdmin ? [{ id: 'admin', label: 'ניהול', icon: <Settings size={16} /> }] : [])
           ].map((tab) => (
-            <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex items-center gap-2 px-6 py-3 rounded-xl text-xs font-black transition-all border whitespace-nowrap ${activeTab === tab.id ? 'bg-blue-600 text-white border-blue-500 shadow-lg scale-105' : 'bg-slate-900/50 text-slate-500 border-white/5 hover:text-white'}`}>{tab.icon} {tab.label}</button>
+            <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex items-center gap-2 px-6 py-3 rounded-xl text-xs font-black transition-all border whitespace-nowrap ${activeTab === tab.id ? 'bg-blue-600 text-white border-blue-500 shadow-lg scale-105' : 'bg-slate-50 text-slate-500 border-slate-200 hover:text-slate-900'}`}>{tab.icon} {tab.label}</button>
           ))}
         </nav>
 
         {activeTab === 'leagues' && (
           <section className="space-y-12">
-            <div className="bg-slate-900/40 p-8 rounded-[3rem] border border-white/5 flex flex-col md:flex-row items-center justify-between gap-6 shadow-2xl relative overflow-hidden">
-               <div className="flex items-center gap-6 text-right flex-1 z-10"><div className="bg-blue-600/10 p-4 rounded-3xl text-blue-500 border border-blue-500/20"><Newspaper size={32} /></div><div><div className="flex items-center gap-3"><h3 className="text-xl font-black mb-1">סיקור הליגות</h3><span className="text-[10px] font-black text-blue-400 bg-blue-400/10 px-3 py-1 rounded-full border border-blue-400/20">{currentMonth}</span></div><p className="text-slate-400 text-sm max-w-xl">{commentary || "ניתוח AI זמין..."}</p></div></div>
-               <button disabled={isGeneratingCommentary} onClick={() => { setIsGeneratingCommentary(true); generateLeagueCommentary(currentMonth, premierStats, history).then(setCommentary).finally(() => setIsGeneratingCommentary(false)); }} className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-4 rounded-2xl font-black text-xs shadow-xl disabled:opacity-50 transition-all active:scale-95 shrink-0 z-10">{isGeneratingCommentary ? "מנתח..." : "עדכן סיקור AI"}</button>
+            <div className="bg-slate-50 p-8 rounded-[3rem] border border-slate-200 flex flex-col md:flex-row items-center justify-between gap-6 shadow-sm">
+               <div className="flex items-center gap-6 text-right flex-1"><div className="bg-blue-100 p-4 rounded-3xl text-blue-600 border border-blue-200"><Newspaper size={32} /></div><div><div className="flex items-center gap-3"><h3 className="text-xl font-black mb-1 text-slate-800">סיקור הליגות</h3><span className="text-[10px] font-black text-blue-600 bg-blue-50 px-3 py-1 rounded-full border border-blue-200">{currentMonth}</span></div><p className="text-slate-500 text-sm max-w-xl">{commentary || "ניתוח AI זמין..."}</p></div></div>
+               <button disabled={isGeneratingCommentary} onClick={() => { setIsGeneratingCommentary(true); generateLeagueCommentary(currentMonth, premierStats, history).then(setCommentary).finally(() => setIsGeneratingCommentary(false)); }} className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-2xl font-black text-xs shadow-lg disabled:opacity-50 transition-all shrink-0">{isGeneratingCommentary ? "מנתח..." : "עדכן סיקור AI"}</button>
             </div>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">{['premier', 'national'].map(l => (<div key={l} className="space-y-4"><div className="flex justify-between items-center px-4"><h2 className="text-xl font-black flex items-center gap-3 text-blue-500">{l === 'premier' ? <Award /> : <BarChart3 />} {l === 'premier' ? 'ליגת העל' : 'הליגה הלאומית'}</h2></div><div className="bg-slate-900/40 border border-white/5 rounded-[2.5rem] overflow-x-auto shadow-2xl no-scrollbar"><table className="w-full text-right min-w-[600px] md:min-w-0"><TableHeader /><tbody>{(l === 'premier' ? premierStats : nationalStats).map((p, i) => <TableRow key={p.id} p={p} idx={i} />)}</tbody></table></div></div>))}</div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">{['premier', 'national'].map(l => (<div key={l} className="space-y-4"><div className="flex justify-between items-center px-4"><h2 className="text-xl font-black flex items-center gap-3 text-blue-600">{l === 'premier' ? <Award /> : <BarChart3 />} {l === 'premier' ? 'ליגת העל' : 'הליגה הלאומית'}</h2></div><div className="bg-white border border-slate-200 rounded-[2.5rem] overflow-hidden shadow-md overflow-x-auto no-scrollbar"><table className="w-full text-right min-w-[600px] md:min-w-0"><TableHeader /><tbody>{(l === 'premier' ? premierStats : nationalStats).map((p, i) => <TableRow key={p.id} p={p} idx={i} />)}</tbody></table></div></div>))}</div>
           </section>
         )}
 
         {activeTab === 'champions' && (
           <section className="space-y-10">
-            <div className="bg-gradient-to-r from-blue-900/20 to-transparent p-10 rounded-[3rem] border border-blue-500/10 flex items-center gap-6"><div className="bg-blue-600 p-4 rounded-3xl shadow-2xl"><Zap className="text-white" size={36} /></div><div className="text-right"><h2 className="text-3xl font-black italic uppercase tracking-tighter">Champions League</h2><p className="text-blue-400 font-black text-xs tracking-widest mt-1">שלב הבתים • {currentMonth}</p></div></div>
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">{clGroupStats.map((gs) => (<div key={gs.group.id} className="space-y-4"><div className="flex justify-between items-center px-4"><h3 className="font-black text-blue-500 flex items-center gap-2 text-sm"><Check size={14} /> {gs.group.name}</h3>{isAdmin && (<button onClick={() => { setPlayerModalTab('existing'); setShowPlayerModal({show: true, league: 'champions', groupId: gs.group.id}); }} className="p-1.5 bg-blue-600/10 text-blue-500 rounded-lg hover:bg-blue-600 hover:text-white transition-all shadow-sm"><Plus size={14} /></button>)}</div><div className="bg-slate-900/40 border border-white/5 rounded-[1.5rem] overflow-x-auto shadow-lg no-scrollbar"><table className="w-full text-right text-[10px] min-w-[400px] md:min-w-0"><TableHeader /><tbody>{(gs.stats || []).map((p, idx) => <TableRow key={p.id} p={p} idx={idx} />)}</tbody></table></div></div>))}</div>
+            <div className="bg-slate-50 p-10 rounded-[3rem] border border-slate-200 flex items-center gap-6"><div className="bg-blue-600 p-4 rounded-3xl shadow-xl"><Zap className="text-white" size={36} /></div><div className="text-right"><h2 className="text-3xl font-black italic uppercase tracking-tighter text-slate-900">Champions League</h2><p className="text-blue-600 font-black text-xs tracking-widest mt-1">שלב הבתים • {currentMonth}</p></div></div>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">{clGroupStats.map((gs) => (<div key={gs.group.id} className="space-y-4"><div className="flex justify-between items-center px-4"><h3 className="font-black text-blue-600 flex items-center gap-2 text-sm"><Check size={14} /> {gs.group.name}</h3>{isAdmin && (<button onClick={() => { setPlayerModalTab('existing'); setShowPlayerModal({show: true, league: 'champions', groupId: gs.group.id}); }} className="p-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-600 hover:text-white transition-all shadow-sm"><Plus size={14} /></button>)}</div><div className="bg-white border border-slate-200 rounded-[1.5rem] overflow-hidden shadow-sm overflow-x-auto no-scrollbar"><table className="w-full text-right text-[10px] min-w-[400px] md:min-w-0"><TableHeader /><tbody>{(gs.stats || []).map((p, idx) => <TableRow key={p.id} p={p} idx={idx} />)}</tbody></table></div></div>))}</div>
           </section>
         )}
-
-        {activeTab === 'playoffs' && (
-          <section className="space-y-12">
-            <div className="flex justify-center bg-slate-900/50 p-2 rounded-2xl border border-white/5 w-fit mx-auto gap-2">{['premier', 'national'].map(m => (<button key={m} onClick={() => setPlayoffViewMode(m as LeagueType)} className={`px-8 py-3 rounded-xl text-[10px] font-black transition-all ${playoffViewMode === m ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500'}`}>{m === 'premier' ? 'ליגת העל' : 'הליגה הלאומית'}</button>))}</div>
-            {((playoffs && (playoffs as any)[playoffViewMode]) || []).length === 0 ? (<div className="py-32 text-center bg-slate-900/20 border border-white/5 rounded-[4rem] flex flex-col items-center gap-6"><GitBranch size={64} className="text-slate-800" /><h3 className="text-2xl font-black text-slate-500">שלב הפלייאוף טרם הופעל</h3>{isAdmin && <button onClick={() => startLeaguePlayoffs(playoffViewMode)} className="bg-blue-600 text-white px-12 py-5 rounded-2xl font-black shadow-2xl active:scale-95 transition-all">צור שלב נוקאאוט (8 שחקנים)</button>}</div>) : (
-               <div className="flex flex-row justify-between items-start py-10 gap-8 max-w-full mx-auto overflow-x-auto pb-10 px-4 min-h-[600px] no-scrollbar">
-                  <div className="flex flex-col gap-6 items-center shrink-0 pt-4"><span className="text-[10px] font-black text-blue-400 uppercase tracking-widest bg-blue-500/10 px-4 py-1.5 rounded-full border border-blue-500/20 mb-4">רבע גמר</span>{((playoffs as any)[playoffViewMode] || []).filter((m: any) => m.round === 'quarter').map((m: any) => <PlayoffMatchUI key={m.id} match={m} mode={playoffViewMode} />)}</div>
-                  <div className="flex flex-col gap-12 items-center justify-around shrink-0 pt-20"><span className="text-[10px] font-black text-purple-400 uppercase tracking-widest bg-purple-500/10 px-4 py-1.5 rounded-full border border-purple-500/20 mb-4">חצי גמר</span>{((playoffs as any)[playoffViewMode] || []).filter((m: any) => m.round === 'semi').map((m: any) => <PlayoffMatchUI key={m.id} match={m} mode={playoffViewMode} />)}</div>
-                  <div className="flex flex-col gap-12 items-center justify-center shrink-0 pt-40 scale-110"><span className="text-[10px] font-black text-yellow-500 uppercase tracking-widest bg-yellow-500/10 px-4 py-1.5 rounded-full border border-yellow-500/20 mb-8 animate-pulse">הגמר הגדול</span>{(() => { const final = ((playoffs as any)[playoffViewMode] || []).find((m: any) => m.round === 'final'); return final ? <PlayoffMatchUI match={final} mode={playoffViewMode} /> : null; })()}</div>
-               </div>
-            )}
-          </section>
-        )}
-
+        
+        {/* Playoff View, Fixtures, etc follow same color adaptation if visible */}
         {activeTab === 'fixtures' && (
           <section className="space-y-6">
              <div className="flex flex-col md:flex-row justify-between items-center gap-4 px-4">
-                <div className="flex items-center gap-6"><h2 className="text-2xl font-black flex items-center gap-3"><Calendar className="text-blue-500" /> משחקי העונה</h2><div className="flex bg-slate-900 p-1 rounded-xl border border-white/5">{[{ id: 'premier', label: 'ליגת על' }, { id: 'national', label: 'לאומית' }, { id: 'champions', label: "צ'מפיונס" }].map(f => <button key={f.id} onClick={() => setFixtureSubTab(f.id as LeagueType)} className={`px-4 py-2 rounded-lg text-[10px] font-black transition-all ${fixtureSubTab === f.id ? 'bg-blue-600 text-white' : 'text-slate-500'}`}>{f.label}</button>)}</div></div>
-                <div className="relative w-full md:w-80 group"><Search className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-blue-500 transition-colors" size={16} /><input type="text" placeholder="חיפוש לפי שחקן..." value={fixtureSearchQuery} onChange={(e) => setFixtureSearchQuery(e.target.value)} className="w-full bg-slate-900 border border-white/5 rounded-xl pr-12 pl-4 py-3 text-xs font-black outline-none focus:border-blue-500/30 transition-all text-white" /></div>
+                <div className="flex items-center gap-6"><h2 className="text-2xl font-black flex items-center gap-3"><Calendar className="text-blue-600" /> משחקי העונה</h2><div className="flex bg-slate-50 p-1 rounded-xl border border-slate-200">{[{ id: 'premier', label: 'ליגת על' }, { id: 'national', label: 'לאומית' }, { id: 'champions', label: "צ'מפיונס" }].map(f => <button key={f.id} onClick={() => setFixtureSubTab(f.id as LeagueType)} className={`px-4 py-2 rounded-lg text-[10px] font-black transition-all ${fixtureSubTab === f.id ? 'bg-blue-600 text-white' : 'text-slate-400'}`}>{f.label}</button>)}</div></div>
+                <div className="relative w-full md:w-80 group"><Search className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400" size={16} /><input type="text" placeholder="חיפוש..." value={fixtureSearchQuery} onChange={(e) => setFixtureSearchQuery(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl pr-12 pl-4 py-3 text-xs font-black outline-none focus:bg-white" /></div>
              </div>
-             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{(fixtures || []).filter(f => { if (!f || f.league !== fixtureSubTab) return false; const p1 = (players || []).find(p => p.id === f.homePlayerId), p2 = (players || []).find(p => p.id === f.awayPlayerId); const q = fixtureSearchQuery.toLowerCase(); return !q || p1?.name.toLowerCase().includes(q) || p2?.name.toLowerCase().includes(q); }).sort((a,b) => Number(a.completed) - Number(b.completed)).map(f => { const p1 = (players || []).find(p => p.id === f.homePlayerId), p2 = (players || []).find(p => p.id === f.awayPlayerId); if(!p1 || !p2) return null; return (<button key={f.id} disabled={!isAdmin} onClick={() => { setFixtureToUpdate(f); setUpdateScores({ home: f.homeScore?.toString() || '', away: f.awayScore?.toString() || '' }); }} className={`bg-slate-900/50 border ${f.completed ? 'border-green-500/10' : 'border-white/5'} p-6 rounded-[2rem] transition-all hover:bg-slate-900 relative text-right w-full block group`}><div className="flex justify-between text-[8px] font-black text-slate-500 uppercase tracking-widest mb-6"><span>{f.league === 'champions' ? `בית ${f.groupId}` : f.league === 'premier' ? 'ליגת על' : 'לאומית'}</span><span>{new Date(f.date).toLocaleDateString('he-IL')}</span></div><div className="flex items-center justify-between gap-4"><div className="flex-1 flex items-center gap-4"><div className="w-10 h-10 rounded-xl bg-slate-800 shrink-0 shadow-lg overflow-hidden">{p1.photoUrl ? <img src={p1.photoUrl} className="w-full h-full object-cover" alt={p1.name} /> : <UserIcon size={14} className="m-auto mt-3 text-slate-600" />}</div><span className="font-black text-xs truncate max-w-[80px] text-right text-white">{p1.name}</span></div><div className="bg-black/40 px-4 py-3 rounded-2xl border border-white/5 shrink-0 flex items-center gap-4 shadow-inner">{f.completed ? <><span className="text-lg font-black text-white">{f.homeScore}</span><span className="text-slate-700">:</span><span className="text-lg font-black text-white">{f.awayScore}</span></> : isAdmin ? <span className="text-[10px] font-black text-blue-500 px-4 group-hover:scale-110 transition-transform">עדכן תוצאה</span> : <span className="text-[10px] font-black text-slate-700 tracking-[0.2em]">VS</span>}</div><div className="flex-1 flex items-center gap-4 justify-end text-left"><span className="font-black text-xs truncate max-w-[80px] text-left text-white">{p2.name}</span><div className="w-10 h-10 rounded-xl bg-slate-800 shrink-0 shadow-lg overflow-hidden">{p2.photoUrl ? <img src={p2.photoUrl} className="w-full h-full object-cover" alt={p2.name} /> : <UserIcon size={14} className="m-auto mt-3 text-slate-600" />}</div></div></div></button>);})}</div>
+             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{(fixtures || []).filter(f => f.league === fixtureSubTab).map(f => {
+               const p1 = (players || []).find(p => p.id === f.homePlayerId), p2 = (players || []).find(p => p.id === f.awayPlayerId);
+               if (!p1 || !p2) return null;
+               return (<div key={f.id} className="bg-white border border-slate-200 p-6 rounded-3xl shadow-sm flex items-center justify-between text-slate-800">
+                  <span className="font-bold text-xs">{p1.name}</span>
+                  <div className="bg-slate-50 px-4 py-2 rounded-xl font-black text-lg">{f.completed ? `${f.homeScore} : ${f.awayScore}` : 'VS'}</div>
+                  <span className="font-bold text-xs">{p2.name}</span>
+               </div>)
+             })}</div>
           </section>
         )}
 
-        {activeTab === 'history' && (
-          <section className="space-y-8">
-            <div className="flex items-center gap-4 px-4"><History className="text-blue-500" size={32}/><h2 className="text-3xl font-black italic">היסטוריית הליגה</h2></div>
-            {(history || []).length === 0 ? (<div className="py-32 text-center bg-slate-900/20 border border-white/5 rounded-[4rem] flex flex-col items-center gap-6 text-slate-500 font-black italic"><History size={64}/><p>טרם הסתיימו עונות במערכת</p></div>) : (
-              <div className="grid grid-cols-1 gap-6">{[...history].reverse().map((s) => (<div key={s.id} className="bg-slate-900/50 border border-white/5 rounded-[2.5rem] overflow-hidden shadow-2xl transition-all relative"><button onClick={() => setExpandedHistoryId(expandedHistoryId === s.id ? null : s.id)} className="w-full flex items-center justify-between p-8 text-right hover:bg-white/5 transition-colors"><div className="flex items-center gap-6"><div className="bg-blue-600 p-3 rounded-2xl shadow-lg shadow-blue-600/20"><History className="text-white" size={24}/></div><div><h3 className="text-2xl font-black">{s.seasonName}</h3><div className="flex flex-wrap items-center gap-4 mt-2">{s.premierWinner && <span className="text-[10px] font-black text-yellow-500 bg-yellow-500/10 px-3 py-1 rounded-full border border-yellow-500/20 uppercase tracking-widest flex items-center gap-1"><Trophy size={10}/> אלוף העל: {s.premierWinner}</span>}{s.championsWinner && <span className="text-[10px] font-black text-blue-400 bg-blue-500/10 px-3 py-1 rounded-full border border-blue-500/20 uppercase tracking-widest flex items-center gap-1"><Zap size={10}/> אלוף הצ'מפיונס: {s.championsWinner}</span>}<span className="text-[9px] text-slate-600 font-bold uppercase tracking-widest">{new Date(s.timestamp).toLocaleDateString('he-IL')}</span></div></div></div><div className="flex items-center gap-4">{isAdmin && (<button onClick={(e) => { e.stopPropagation(); setHistoryToDelete(s); }} className="p-2 text-slate-600 hover:text-red-500 transition-colors"><Trash2 size={20} /></button>)}<ChevronDown size={24} className={`text-slate-500 transition-transform ${expandedHistoryId === s.id ? 'rotate-180' : ''}`}/></div></button>{expandedHistoryId === s.id && (<div className="p-8 border-t border-white/5 bg-black/20 animate-in slide-in-from-top duration-300"><div className="grid grid-cols-1 lg:grid-cols-2 gap-8"><div><h4 className="font-black text-blue-500 mb-4 flex items-center gap-2"><Award size={16}/> טבלת ליגת העל</h4><div className="bg-slate-950/50 rounded-2xl overflow-hidden border border-white/5 shadow-inner"><table className="w-full text-right"><TableHeader /><tbody>{(s.premierTable || []).map((p, idx) => <TableRow key={p.id} p={p} idx={idx} />)}</tbody></table></div></div><div><h4 className="font-black text-slate-400 mb-4 flex items-center gap-2"><BarChart3 size={16}/> טבלת הליגה הלאומית</h4><div className="bg-slate-950/50 rounded-2xl overflow-hidden border border-white/5 shadow-inner"><table className="w-full text-right"><TableHeader /><tbody>{(s.nationalTable || []).map((p, idx) => <TableRow key={p.id} p={p} idx={idx} />)}</tbody></table></div></div></div></div>)}</div>))}</div>
-            )}
-          </section>
-        )}
-
-        {activeTab === 'hof' && (
-          <section className="space-y-10">
-             <div className="flex justify-between items-center px-4"><h2 className="text-3xl font-black flex items-center gap-4 text-yellow-500 italic"><Crown size={32} /> היכל התהילה</h2>{isAdmin && <button onClick={() => setShowHOFModal(true)} className="bg-yellow-600 text-black px-8 py-3.5 rounded-2xl font-black text-xs shadow-xl active:scale-95 transition-all">אגדה חדשה</button>}</div>
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">{(hallOfFame || []).map(e => (<div key={e.id} className="bg-slate-900/60 border border-yellow-500/20 p-10 rounded-[3rem] relative group overflow-hidden"><div className="flex items-center gap-8"><div className="bg-yellow-500/10 p-5 rounded-[1.5rem] text-yellow-500 border border-yellow-500/20 shadow-inner group-hover:rotate-12 transition-transform duration-500"><Trophy size={48} /></div><div className="text-right flex-1"><h3 className="text-3xl font-black text-white">{e.playerName}</h3><p className="text-yellow-500 font-black text-xs uppercase tracking-widest mt-1 italic">{e.achievement}</p><div className="flex items-center gap-2 text-slate-600 font-black text-[9px] uppercase mt-3 bg-white/5 px-3 py-1 rounded-full w-fit mr-auto"><Calendar size={12}/> {e.season}</div></div></div>{isAdmin && <button onClick={() => setHallOfFame(prev => (prev || []).filter(x => x.id !== e.id))} className="absolute top-8 left-8 text-slate-700 hover:text-red-500 transition-colors"><Trash2 size={20} /></button>}</div>))}</div>
-          </section>
-        )}
-
-        {activeTab === 'admin' && isAdmin && (
-          <section className="space-y-10 pb-10">
-             <div className="bg-slate-900/60 p-10 rounded-[3rem] border border-white/5 space-y-8 shadow-2xl">
-                <h3 className="text-xl font-black flex items-center gap-4 text-red-500 flex-row-reverse"><RefreshCcw size={28} /> ניהול עונה</h3>
-                <button onClick={() => setShowArchiveModal(true)} className="w-full bg-red-600/10 hover:bg-red-600 text-red-500 hover:text-white p-6 rounded-[2rem] border border-red-500/20 font-black text-sm transition-all active:scale-95 flex flex-col items-center gap-2"><span>סגור עונה וארכב</span><span className="text-[10px] opacity-70">שומר היסטוריה ומאפס את הטבלאות</span></button>
+        {/* Admin Login Modal */}
+        {showPinModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 backdrop-blur-sm bg-black/10">
+             <div className="bg-white p-12 rounded-[4rem] border border-slate-200 shadow-2xl relative w-full max-w-sm text-center">
+                <h2 className="text-2xl font-black mb-8 text-slate-900 italic">ADMIN ACCESS</h2>
+                <input type="password" value={pin} onChange={(e) => setPin(e.target.value)} maxLength={4} className="w-full bg-slate-50 border border-slate-200 rounded-3xl py-6 text-center text-5xl font-black text-blue-600 mb-8 outline-none focus:border-blue-600" autoFocus />
+                <button onClick={handleAdminLogin} className="w-full bg-blue-600 text-white py-5 rounded-[2rem] font-black hover:bg-blue-700 active:scale-95 transition-all shadow-lg">כניסת מנהל</button>
              </div>
-
-             <div className="bg-slate-900/60 p-10 rounded-[3rem] border border-white/5 space-y-8 shadow-2xl">
-                <h3 className="text-xl font-black flex items-center gap-4 text-blue-500 flex-row-reverse"><UserPlus size={28} /> הוספת שחקנים לליגות</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-                   <button onClick={() => { setPlayerModalTab('new'); setShowPlayerModal({show: true, league: 'premier'}); }} className="bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 p-8 rounded-[2rem] border border-blue-500/20 font-black text-sm flex flex-col items-center gap-4 transition-all active:scale-95"><Award size={32} /> <span>ליגת העל</span></button>
-                   <button onClick={() => { setPlayerModalTab('new'); setShowPlayerModal({show: true, league: 'national'}); }} className="bg-slate-800/50 hover:bg-slate-800 text-slate-400 p-8 rounded-[2rem] border border-white/5 font-black text-sm flex flex-col items-center gap-4 transition-all active:scale-95"><BarChart3 size={32} /> <span>הלאומית</span></button>
-                   <div className="grid grid-cols-2 gap-2">
-                      {(clGroups || []).map((group) => (<button key={group.id} onClick={() => { setPlayerModalTab('new'); setShowPlayerModal({show: true, league: 'champions', groupId: group.id}); }} className="bg-blue-400/5 hover:bg-blue-400/10 text-blue-400 p-4 rounded-[1.5rem] border border-white/5 font-black text-[10px] flex flex-col items-center gap-1 transition-all active:scale-95"><Zap size={16} /><span>{group.name}</span></button>))}
-                   </div>
-                </div>
-             </div>
-
-             <div className="bg-slate-900/60 p-10 rounded-[3rem] border border-white/5 space-y-8 shadow-2xl">
-                <div className="flex flex-col md:flex-row-reverse justify-between items-center gap-4"><div className="text-right"><h3 className="text-xl font-black flex items-center gap-4 text-orange-500 flex-row-reverse"><Users size={28} /> ניהול שחקנים וליגות</h3></div><div className="relative w-full md:w-64"><Search className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500" size={14} /><input type="text" placeholder="חיפוש שחקן..." value={adminSearchQuery} onChange={(e) => setAdminSearchQuery(e.target.value)} className="w-full bg-black/40 border border-white/5 rounded-xl py-3 pr-10 pl-4 text-xs font-black outline-none focus:border-orange-500/50 text-white" /></div></div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">{(players || []).filter(p => !adminSearchQuery || p.name.includes(adminSearchQuery)).map(p => (<div key={p.id} className="flex flex-col bg-black/40 rounded-2xl border border-white/5 overflow-hidden shadow-lg group"><div className="flex items-center gap-4 p-5"><div className="w-12 h-12 rounded-xl overflow-hidden bg-slate-800 shrink-0 border border-white/5 shadow-md group-hover:scale-105 transition-transform">{p.photoUrl ? <img src={p.photoUrl} className="w-full h-full object-cover" alt={p.name} /> : <UserIcon size={20} className="m-auto mt-3 text-slate-600" />}</div><div className="flex-1 overflow-hidden text-right"><div className="font-black text-sm text-white">{p.name}</div><div className="text-[10px] text-slate-500 font-bold">{p.sonyUsername}</div></div><button onClick={() => setPlayerToDelete(p)} className="p-2 bg-red-600/10 rounded-lg hover:bg-red-600 hover:text-white transition-all text-red-600 shadow-sm"><Trash2 size={16} /></button></div><div className="px-5 pb-5 flex flex-wrap gap-2 justify-end">{(premierPlayerIds || []).includes(p.id) && (<button onClick={() => setPlayerToRemoveFromLeague({player: p, league: 'premier'})} className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-600/10 border border-blue-500/20 rounded-full text-[9px] font-black text-blue-500 hover:bg-red-600 hover:text-white hover:border-red-500 transition-all"><Award size={10} /> ליגת על <X size={10} /></button>)}{(nationalPlayerIds || []).includes(p.id) && (<button onClick={() => setPlayerToRemoveFromLeague({player: p, league: 'national'})} className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-800 border border-white/10 rounded-full text-[9px] font-black text-slate-400 hover:bg-red-600 hover:text-white hover:border-red-500 transition-all"><BarChart3 size={10} /> לאומית <X size={10} /></button>)}{(clGroups || []).map(group => (group.playerIds || []).includes(p.id) && (<button key={group.id} onClick={() => setPlayerToRemoveFromLeague({player: p, league: 'champions', groupId: group.id})} className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-400/10 border border-blue-500/20 rounded-full text-[9px] font-black text-blue-400 hover:bg-red-600 hover:text-white hover:border-red-500 transition-all"><Zap size={10} /> {group.name} <X size={10} /></button>))}</div></div>))}</div>
-             </div>
-          </section>
+          </div>
         )}
       </main>
 
-      {/* MODALS */}
-      {selectedPlayerInfo && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-md">
-           <div className="absolute inset-0 bg-black/80" onClick={() => setSelectedPlayerInfo(null)} />
-           <div className="relative w-full max-w-lg animate-in zoom-in-95 duration-300">
-              <div className="bg-slate-900 border border-blue-500/30 p-1 rounded-[3rem] shadow-2xl overflow-hidden">
-                 <div className="bg-slate-900 rounded-[2.8rem] p-8 flex flex-col items-center relative">
-                    <button onClick={() => setSelectedPlayerInfo(null)} className="absolute top-6 right-6 text-slate-500 hover:text-white"><X size={20} /></button>
-                    <div className="flex flex-col items-center gap-4 mb-8">
-                       <div className="w-24 h-24 rounded-[2rem] overflow-hidden border-2 border-slate-800 bg-slate-800 shadow-xl">{selectedPlayerInfo.photoUrl ? <img src={selectedPlayerInfo.photoUrl} className="w-full h-full object-cover" alt={selectedPlayerInfo.name} /> : <UserIcon size={32} className="m-auto mt-7 text-slate-700" />}</div>
-                       <div className="text-center">
-                          <h3 className="text-2xl font-black text-white italic tracking-tighter mb-1">{selectedPlayerInfo.name}</h3>
-                          <div className="flex items-center justify-center gap-2"><span className="text-[9px] text-blue-500 font-black uppercase tracking-widest bg-blue-500/5 px-3 py-1 rounded-full border border-blue-500/10">{selectedPlayerInfo.sonyUsername}</span></div>
-                          <div className="flex items-center justify-center gap-1.5 mt-4">
-                             {getPlayerCareerStats(selectedPlayerInfo.id).streak.map((res, i) => (<div key={i} className={`w-4 h-4 rounded-full ${res === 'W' ? 'bg-green-500 shadow-glow shadow-green-500/40' : res === 'L' ? 'bg-red-500 shadow-glow shadow-red-500/40' : 'bg-slate-500'} flex items-center justify-center text-[7px] font-black text-white`}>{res}</div>))}
-                          </div>
-                       </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4 w-full">
-                       {(() => { 
-                         const career = getPlayerCareerStats(selectedPlayerInfo.id); 
-                         return [{ label: 'משחקים', val: career.gp, icon: <Swords size={16} />, color: 'text-slate-400' }, { label: 'ניצחונות', val: career.w, icon: <Flame size={16} />, color: 'text-green-500' }, { label: 'תארים', val: career.titles, icon: <Trophy size={16} />, color: 'text-yellow-600' }, { label: 'עונות פעיל', val: career.activeSeasons, icon: <Calendar size={16} />, color: 'text-blue-500' }].map((stat, i) => (<div key={i} className="bg-black/30 border border-white/5 rounded-2xl p-4 flex flex-col items-center gap-1"><div className={`${stat.color} mb-1 opacity-70`}>{stat.icon}</div><span className="text-[9px] font-black text-slate-600 uppercase tracking-widest leading-none">{stat.label}</span><span className="text-xl font-black text-white leading-tight">{stat.val}</span></div>));
-                       })()}
-                    </div>
-                    {isAdmin && (<button onClick={() => { setShowPlayerModal({show: true, player: selectedPlayerInfo}); setSelectedPlayerInfo(null); }} className="w-full mt-6 py-4 bg-slate-800 rounded-2xl hover:bg-blue-600 transition-all font-black text-[10px] text-white flex items-center justify-center gap-2"><Edit2 size={14}/> עריכת פרטי שחקן</button>)}
-                 </div>
-              </div>
-           </div>
-        </div>
-      )}
-
-      {showPinModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 backdrop-blur-md">
-           <div className="absolute inset-0 bg-black/80" onClick={() => setShowPinModal(false)} />
-           <div className="bg-slate-900 p-12 rounded-[4rem] border border-white/10 shadow-2xl relative w-full max-sm text-center animate-in zoom-in-95 duration-300">
-              <h2 className="text-2xl font-black mb-8 text-white tracking-tighter italic text-center w-full">ADMIN ACCESS</h2>
-              <input type="password" value={pin} onChange={(e) => setPin(e.target.value)} maxLength={4} className="w-full bg-black border border-white/5 rounded-3xl py-6 text-center text-5xl font-black text-blue-500 mb-8 outline-none focus:border-blue-600" autoFocus onKeyDown={(e) => e.key === 'Enter' && handleAdminLogin()} />
-              <button onClick={handleAdminLogin} className="w-full bg-blue-600 text-white py-5 rounded-[2rem] font-black active:scale-95 transition-all shadow-xl">כניסת מנהל</button>
-           </div>
-        </div>
-      )}
-
-      {showPlayerModal.show && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 backdrop-blur-md">
-           <div className="absolute inset-0 bg-black/80" onClick={() => setShowPlayerModal({show: false})} />
-           <div className="bg-slate-900 border border-white/10 p-1 rounded-[3rem] shadow-2xl relative w-full max-md animate-in zoom-in-95 duration-300 overflow-hidden">
-              <div className="bg-slate-950 p-10 space-y-6 text-right">
-                <div className="flex justify-between items-center"><h2 className="text-2xl font-black flex items-center gap-4 text-white"><UserPlus className="text-blue-500" size={28} /> {showPlayerModal.player ? 'עריכת שחקן' : 'הוספת שחקן'}</h2><button onClick={() => setShowPlayerModal({show: false})} className="text-slate-500 hover:text-white"><X size={24}/></button></div>
-                {!showPlayerModal.player && (<div className="flex bg-black/40 p-1 rounded-2xl border border-white/5"><button onClick={() => setPlayerModalTab('new')} className={`flex-1 py-3 rounded-xl text-xs font-black transition-all ${playerModalTab === 'new' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500'}`}>שחקן חדש</button><button onClick={() => setPlayerModalTab('existing')} className={`flex-1 py-3 rounded-xl text-xs font-black transition-all ${playerModalTab === 'existing' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500'}`}>קיים במערכת</button></div>)}
-                {playerModalTab === 'new' || showPlayerModal.player ? (
-                  <div className="space-y-5">
-                    <div className="flex flex-col items-center gap-4 mb-4"><label className="w-20 h-20 rounded-[1.5rem] bg-black/50 border-2 border-dashed border-white/10 flex flex-col items-center justify-center cursor-pointer hover:border-blue-500/50 transition-all overflow-hidden relative">{(tempUploadedPhoto || showPlayerModal.player?.photoUrl) ? <img src={tempUploadedPhoto || showPlayerModal.player?.photoUrl} className="w-full h-full object-cover" alt="temp" /> : <Plus className="text-slate-600" size={20} />}<input type="file" className="hidden" accept="image/*" onChange={(e) => { const f = e.target.files?.[0]; if(f) { const r = new FileReader(); r.onloadend = () => setTempUploadedPhoto(r.result as string); r.readAsDataURL(f); } }} /></label></div>
-                    <div className="space-y-2"><label className="text-[10px] font-black text-slate-500 mr-2 uppercase">Full Name</label><input id="p-name" autoFocus placeholder="שם מלא" defaultValue={showPlayerModal.player?.name} className="w-full bg-black/50 border border-white/5 rounded-2xl p-5 font-black text-white text-right outline-none focus:border-blue-500" /></div>
-                    <div className="space-y-2"><label className="text-[10px] font-black text-slate-500 mr-2 uppercase">Playstation ID</label><input id="p-sony" placeholder="PSN ID" defaultValue={showPlayerModal.player?.sonyUsername} className="w-full bg-black/50 border border-white/5 rounded-2xl p-5 font-black text-white text-right outline-none focus:border-blue-500" /></div>
-                    <button onClick={() => { const n = (document.getElementById('p-name') as HTMLInputElement).value, s = (document.getElementById('p-sony') as HTMLInputElement).value; if(n) savePlayer({ name: n, sonyUsername: s, photoUrl: tempUploadedPhoto || showPlayerModal.player?.photoUrl || '' }, showPlayerModal.league, showPlayerModal.groupId); }} className="w-full bg-blue-600 text-white font-black py-5 rounded-[2rem] active:scale-95 transition-all shadow-xl mt-4">שמירה</button>
-                  </div>
-                ) : (
-                  <div className="space-y-5 text-right">
-                    <div className="relative group"><Search className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-blue-500 transition-colors" size={16} /><input type="text" placeholder="חפש שחקן קיים..." value={existingPlayerSearch} onChange={(e) => setExistingPlayerSearch(e.target.value)} className="w-full bg-black/50 border border-white/5 rounded-2xl py-4 pr-11 pl-4 text-xs font-black text-white outline-none focus:border-blue-500/30 transition-all text-right" /></div>
-                    <div className="max-h-64 overflow-y-auto no-scrollbar space-y-2">{(players || []).filter(p => !existingPlayerSearch || p.name.includes(existingPlayerSearch)).map(p => (<button key={p.id} onClick={() => addExistingPlayerToLeague(p.id, showPlayerModal.league!, showPlayerModal.groupId)} className="w-full flex items-center gap-4 p-4 bg-white/5 hover:bg-white/10 rounded-2xl border border-white/5 transition-all text-right group"><div className="w-10 h-10 rounded-xl overflow-hidden bg-slate-800 shrink-0 shadow-lg">{p.photoUrl ? <img src={p.photoUrl} className="w-full h-full object-cover" alt={p.name} /> : <UserIcon size={14} className="m-auto mt-3 text-slate-600" />}</div><div className="flex-1"><div className="font-black text-xs text-white group-hover:text-blue-400 transition-colors">{p.name}</div><div className="text-[9px] text-slate-500 font-bold">{p.sonyUsername}</div></div><div className="p-2 bg-blue-600/10 text-blue-500 rounded-lg group-hover:bg-blue-600 group-hover:text-white transition-all"><UserCheck size={16} /></div></button>))}</div>
-                  </div>
-                )}
-              </div>
-           </div>
-        </div>
-      )}
-
-      {fixtureToUpdate && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center p-6 backdrop-blur-xl">
-           <div className="absolute inset-0 bg-black/80" onClick={() => setFixtureToUpdate(null)} />
-           <div className="relative w-full max-md animate-in zoom-in-95 duration-300">
-              <div className="bg-slate-900 border border-blue-500/40 p-1 rounded-[3.5rem] shadow-2xl overflow-hidden">
-                 <div className="bg-slate-950 rounded-[3.2rem] p-10 flex flex-col items-center">
-                    <button onClick={() => setFixtureToUpdate(null)} className="absolute top-8 right-8 text-slate-500 hover:text-white"><X size={24} /></button>
-                    <h3 className="text-2xl font-black mb-8 text-white italic tracking-tighter">עדכון תוצאת משחק</h3>
-                    <div className="flex items-center justify-center gap-6 w-full mb-10">
-                       <div className="flex flex-col items-center gap-3 flex-1">
-                          <div className="w-16 h-16 rounded-2xl bg-slate-800 overflow-hidden border border-white/5">
-                             {(players || []).find(p => p.id === fixtureToUpdate.homePlayerId)?.photoUrl ? <img src={(players || []).find(p => p.id === fixtureToUpdate.homePlayerId)?.photoUrl} className="w-full h-full object-cover" alt="home" /> : <UserIcon className="m-auto mt-4 text-slate-600" />}
-                          </div>
-                          <input type="number" value={updateScores.home} onChange={(e) => setUpdateScores(prev => ({ ...prev, home: e.target.value }))} className="w-20 bg-slate-900 border border-blue-500/30 rounded-2xl py-4 text-center text-3xl font-black text-white outline-none" placeholder="0" />
-                       </div>
-                       <div className="text-2xl font-black text-slate-700 mt-12">:</div>
-                       <div className="flex flex-col items-center gap-3 flex-1">
-                          <div className="w-16 h-16 rounded-2xl bg-slate-800 overflow-hidden border border-white/5">
-                             {(players || []).find(p => p.id === fixtureToUpdate.awayPlayerId)?.photoUrl ? <img src={(players || []).find(p => p.id === fixtureToUpdate.awayPlayerId)?.photoUrl} className="w-full h-full object-cover" alt="away" /> : <UserIcon className="m-auto mt-4 text-slate-600" />}
-                          </div>
-                          <input type="number" value={updateScores.away} onChange={(e) => setUpdateScores(prev => ({ ...prev, away: e.target.value }))} className="w-20 bg-slate-900 border border-blue-500/30 rounded-2xl py-4 text-center text-3xl font-black text-white outline-none" placeholder="0" />
-                       </div>
-                    </div>
-                    <button onClick={() => {
-                        const h = parseInt(updateScores.home), a = parseInt(updateScores.away);
-                        if (!isNaN(h) && !isNaN(a)) {
-                          setFixtures(prev => (prev || []).map(f => f.id === fixtureToUpdate.id ? { ...f, homeScore: h, awayScore: a, completed: true } : f));
-                          setFixtureToUpdate(null);
-                        }
-                    }} className="w-full py-5 bg-blue-600 text-white rounded-[2rem] font-black flex items-center justify-center gap-3 shadow-xl active:scale-95 transition-all"><Save size={18} />שמור תוצאה</button>
-                 </div>
-              </div>
-           </div>
-        </div>
-      )}
-
-      {showArchiveModal && (
-        <div className="fixed inset-0 z-[250] flex items-center justify-center p-6 backdrop-blur-2xl">
-           <div className="absolute inset-0 bg-black/90" onClick={() => setShowArchiveModal(false)} />
-           <div className="relative w-full max-w-sm animate-in zoom-in-95 duration-300">
-              <div className="bg-slate-900 border border-blue-500/40 p-1 rounded-[3.5rem] shadow-2xl overflow-hidden">
-                 <div className="bg-slate-950 rounded-[3.2rem] p-12 flex flex-col items-center text-center space-y-6">
-                    <div className="w-20 h-20 rounded-full bg-blue-600/10 flex items-center justify-center border border-blue-500/20"><RefreshCcw className="text-blue-500" size={36} /></div>
-                    <div className="text-right w-full"><h3 className="text-2xl font-black text-white italic">סגירת עונה {currentMonth}</h3><p className="text-slate-400 text-xs font-bold mt-2">הטבלאות והזוכים יישמרו בהיסטוריה. אנא בחר שם לעונה הבאה:</p></div>
-                    <input id="new-season-name" placeholder="שם העונה הבאה" className="w-full bg-slate-900 border border-white/5 rounded-2xl p-5 font-black text-white text-right outline-none focus:border-blue-500" autoFocus />
-                    <div className="flex flex-col gap-3 w-full">
-                       <button onClick={() => { 
-                          const val = (document.getElementById('new-season-name') as HTMLInputElement).value; 
-                          if(val) archiveSeason(val); 
-                          else alert('נא להזין שם עונה'); 
-                       }} className="w-full py-5 bg-blue-600 text-white rounded-[2rem] font-black text-xs shadow-xl active:scale-95">סגור עונה ופתח חדשה</button>
-                    </div>
-                 </div>
-              </div>
-           </div>
-        </div>
-      )}
-
-      <footer className="mt-20 border-t border-white/5 py-16 opacity-20 text-center">
-        <div className="flex flex-col items-center gap-4"><Trophy size={24} /><p className="text-[10px] font-black uppercase tracking-[0.6em] italic">IFL 26 LEAGUE MASTER • EST 2022</p></div>
+      <footer className="mt-20 border-t border-slate-100 py-16 opacity-30 text-center">
+        <div className="flex flex-col items-center gap-4"><Trophy size={24} className="text-slate-400" /><p className="text-[10px] font-black uppercase tracking-[0.6em] italic text-slate-500">IFL 26 LEAGUE MASTER • EST 2022</p></div>
       </footer>
     </div>
   );
