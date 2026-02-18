@@ -63,7 +63,7 @@ function useLocalStorage<T>(key: string, initialValue: T): [T, React.Dispatch<Re
     try {
       window.localStorage.setItem(key, JSON.stringify(storedValue));
     } catch (e) {
-      console.warn('Storage failed', e);
+      console.warn('Storage sync failed:', e);
     }
   }, [key, storedValue]);
 
@@ -144,56 +144,68 @@ const App: React.FC = () => {
   const ignorePushFromCloud = useRef(false);
 
   useEffect(() => {
-    // 1. Get Firebase and Env securely
-    const firebase = (window as any).firebase;
-    if (!firebase) return;
-
     try {
-      // Accessing env variables defensively for Vite/Netlify
-      const env = (import.meta as any).env || {};
-      const apiKey = env.VITE_FIREBASE_API_KEY;
-      const databaseURL = env.VITE_FIREBASE_DATABASE_URL;
-
-      if (!apiKey || !databaseURL) {
-        console.warn("Firebase Keys Missing: Check Netlify environment variables (VITE_FIREBASE_API_KEY). Proceeding in offline mode.");
+      const firebase = (window as any).firebase;
+      if (!firebase) {
+        console.warn("Firebase script not detected in the document header.");
         return;
       }
 
-      // Initialize App if not already started
+      // Defensively access env variables
+      let apiKey, databaseURL;
+      try {
+        apiKey = (import.meta as any).env?.VITE_FIREBASE_API_KEY;
+        databaseURL = (import.meta as any).env?.VITE_FIREBASE_DATABASE_URL;
+      } catch (e) {
+        console.error("Critical: Could not read import.meta.env variables.", e);
+      }
+
+      if (!apiKey || !databaseURL) {
+        console.warn("Firebase credentials missing from Environment Variables. Continuing in Local Mode.");
+        return;
+      }
+
+      // Initialize if not already initialized
       if (!firebase.apps || firebase.apps.length === 0) {
-        firebase.initializeApp({ apiKey, databaseURL });
+        try {
+          firebase.initializeApp({ apiKey, databaseURL });
+        } catch (initErr) {
+          console.error("Firebase initializeApp failed:", initErr);
+        }
       }
 
       const db = firebase.database();
       const mainRef = db.ref('ifl_global_v2');
       const connRef = db.ref('.info/connected');
 
-      // Connection state listener
       connRef.on('value', (snap: any) => {
         setIsCloudConnected(snap.val() === true);
       });
 
-      // Data listener
       mainRef.on('value', (snapshot: any) => {
-        const data = snapshot.val();
-        if (data) {
-          setIsSyncing(true);
-          ignorePushFromCloud.current = true;
-          
-          if (data.players) setPlayers(data.players);
-          if (data.premierIds) setPremierPlayerIds(data.premierIds);
-          if (data.nationalIds) setNationalPlayerIds(data.nationalIds);
-          if (data.clGroups) setClGroups(data.clGroups);
-          if (data.fixtures) setFixtures(data.fixtures);
-          if (data.hof) setHallOfFame(data.hof);
-          if (data.month) setCurrentMonth(data.month);
-          if (data.playoffs) setPlayoffs(data.playoffs);
-          if (data.history) setHistory(data.history);
+        try {
+          const data = snapshot.val();
+          if (data) {
+            setIsSyncing(true);
+            ignorePushFromCloud.current = true;
+            
+            if (data.players) setPlayers(data.players);
+            if (data.premierIds) setPremierPlayerIds(data.premierIds);
+            if (data.nationalIds) setNationalPlayerIds(data.nationalIds);
+            if (data.clGroups) setClGroups(data.clGroups);
+            if (data.fixtures) setFixtures(data.fixtures);
+            if (data.hof) setHallOfFame(data.hof);
+            if (data.month) setCurrentMonth(data.month);
+            if (data.playoffs) setPlayoffs(data.playoffs);
+            if (data.history) setHistory(data.history);
 
-          setTimeout(() => {
-            setIsSyncing(false);
-            ignorePushFromCloud.current = false;
-          }, 300);
+            setTimeout(() => {
+              setIsSyncing(false);
+              ignorePushFromCloud.current = false;
+            }, 300);
+          }
+        } catch (procErr) {
+          console.error("Error processing incoming Firebase snapshot:", procErr);
         }
       });
 
@@ -201,17 +213,16 @@ const App: React.FC = () => {
         mainRef.off();
         connRef.off();
       };
-    } catch (e) {
-      console.error("Firebase Sync Critical Error:", e);
+    } catch (globalErr) {
+      console.error("Unexpected error in Firebase initialization effect:", globalErr);
     }
   }, []);
 
-  // Outgoing sync
   useEffect(() => {
     if (isCloudConnected && !ignorePushFromCloud.current && !isSyncing) {
-      const firebase = (window as any).firebase;
-      if (firebase && firebase.apps && firebase.apps.length > 0) {
-        try {
+      try {
+        const firebase = (window as any).firebase;
+        if (firebase && firebase.apps && firebase.apps.length > 0) {
           const db = firebase.database();
           db.ref('ifl_global_v2').set({
             players: players || [],
@@ -225,9 +236,9 @@ const App: React.FC = () => {
             history: history || [],
             lastSync: new Date().toISOString()
           });
-        } catch (e) {
-          console.error("Cloud push failed:", e);
         }
+      } catch (e) {
+        console.error("Cloud data push failed:", e);
       }
     }
   }, [players, premierPlayerIds, nationalPlayerIds, clGroups, fixtures, hallOfFame, currentMonth, playoffs, history, isCloudConnected, isSyncing]);
@@ -247,9 +258,9 @@ const App: React.FC = () => {
       leaguePlayerIds = group ? (group.playerIds || []) : [];
     }
     
-    const validLeaguePlayerIds = leaguePlayerIds.filter(id => safePlayers.some(p => p.id === id));
+    const validLeaguePlayerIds = leaguePlayerIds.filter(id => safePlayers.some(p => p && p.id === id));
     const stats: Record<string, PlayerStats> = {};
-    safePlayers.filter(p => validLeaguePlayerIds.includes(p.id)).forEach(p => {
+    safePlayers.filter(p => p && validLeaguePlayerIds.includes(p.id)).forEach(p => {
       stats[p.id] = { id: p.id, name: p.name, team: p.sonyUsername || 'PSN', gp: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, gd: 0, pts: 0 };
     });
     
@@ -267,12 +278,12 @@ const App: React.FC = () => {
   };
 
   const getPlayersNotInLeague = (league: LeagueType, groupId?: string): Player[] => {
-    const safePlayers = players || [];
+    const safePlayers = (players || []).filter(Boolean);
     let excludedIds: string[] = [];
     if (league === 'premier') excludedIds = premierPlayerIds || [];
     else if (league === 'national') excludedIds = nationalPlayerIds || [];
     else if (league === 'champions' && groupId) {
-      const group = (clGroups || []).find(g => g.id === groupId);
+      const group = (clGroups || []).find(g => g && g.id === groupId);
       excludedIds = group ? (group.playerIds || []) : [];
     }
     return safePlayers.filter(p => !excludedIds.includes(p.id));
@@ -280,14 +291,14 @@ const App: React.FC = () => {
 
   const premierStats = useMemo(() => calculateTable('premier'), [fixtures, players, premierPlayerIds]);
   const nationalStats = useMemo(() => calculateTable('national'), [fixtures, players, nationalPlayerIds]);
-  const clGroupStats = useMemo(() => (clGroups || []).map(group => ({ group, stats: calculateTable('champions', group.id) })), [fixtures, players, clGroups]);
+  const clGroupStats = useMemo(() => (clGroups || []).filter(Boolean).map(group => ({ group, stats: calculateTable('champions', group.id) })), [fixtures, players, clGroups]);
 
   const archiveSeason = (newSeasonName: string) => {
     const sName = currentMonth;
-    const safePlayers = players || [];
+    const safePlayers = (players || []).filter(Boolean);
     const safePlayoffs = playoffs || { premier: [], national: [], champions: [] };
     const findWinner = (matches: PlayoffMatch[]) => {
-      const final = (matches || []).find(m => m.round === 'final');
+      const final = (matches || []).find(m => m && m.round === 'final');
       return final?.winnerId ? safePlayers.find(p => p.id === final.winnerId)?.name : undefined;
     };
     const newHistoryEntry: SeasonHistoryEntry = {
@@ -303,10 +314,10 @@ const App: React.FC = () => {
 
   const getPlayerCareerStats = (playerId: string) => {
     const stats = { gp: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, pts: 0, titles: 0, streak: [] as string[], activeSeasons: 0 };
-    const safePlayers = players || [];
-    const safeFixtures = fixtures || [];
-    const safeHistory = history || [];
-    const safeHOF = hallOfFame || [];
+    const safePlayers = (players || []).filter(Boolean);
+    const safeFixtures = (fixtures || []).filter(Boolean);
+    const safeHistory = (history || []).filter(Boolean);
+    const safeHOF = (hallOfFame || []).filter(Boolean);
     const playerName = safePlayers.find(p => p.id === playerId)?.name;
     
     [...premierStats, ...nationalStats, ...clGroupStats.flatMap(g => g.stats)].forEach(s => {
@@ -322,7 +333,7 @@ const App: React.FC = () => {
       if (active) stats.activeSeasons += 1;
     });
     if ((premierPlayerIds || []).includes(playerId) || (nationalPlayerIds || []).includes(playerId)) stats.activeSeasons += 1;
-    stats.streak = safeFixtures.filter(f => f && f.completed && (f.homePlayerId === playerId || f.awayPlayerId === playerId)).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 5).map(f => {
+    stats.streak = safeFixtures.filter(f => f.completed && (f.homePlayerId === playerId || f.awayPlayerId === playerId)).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 5).map(f => {
       const isHome = f.homePlayerId === playerId;
       const my = isHome ? (f.homeScore || 0) : (f.awayScore || 0);
       const opp = isHome ? (f.awayScore || 0) : (f.homeScore || 0);
@@ -346,10 +357,10 @@ const App: React.FC = () => {
   };
 
   const executePlayerDeletion = (id: string) => {
-    setPlayers(prev => (prev || []).filter(p => p.id !== id));
+    setPlayers(prev => (prev || []).filter(p => p && p.id !== id));
     setPremierPlayerIds(prev => (prev || []).filter(pid => pid !== id));
     setNationalPlayerIds(prev => (prev || []).filter(pid => pid !== id));
-    setClGroups(prev => (prev || []).map(g => ({ ...g, playerIds: (g.playerIds || []).filter(pid => pid !== id) })));
+    setClGroups(prev => (prev || []).map(g => g ? { ...g, playerIds: (g.playerIds || []).filter(pid => pid !== id) } : g));
     setFixtures(prev => (prev || []).filter(f => f && f.homePlayerId !== id && f.awayPlayerId !== id));
     setPlayerToDelete(null);
   };
@@ -360,8 +371,8 @@ const App: React.FC = () => {
     if (isNaN(h) || isNaN(a)) return;
     setFixtures(prev => (prev || []).map(f => f && f.id === fixtureToUpdate.id ? { ...f, homeScore: h, awayScore: a, completed: true } : f));
     ['premier', 'national', 'champions'].forEach(lk => { 
-      const bracket = (playoffs && playoffs[lk as keyof PlayoffBrackets]) || [];
-      if (bracket.some(m => m.id === fixtureToUpdate.id)) updatePlayoffScore(lk as LeagueType, fixtureToUpdate.id, h, a); 
+      const bracket = (playoffs && (playoffs as any)[lk]) || [];
+      if (bracket.some((m: any) => m && m.id === fixtureToUpdate.id)) updatePlayoffScore(lk as LeagueType, fixtureToUpdate.id, h, a); 
     });
     setFixtureToUpdate(null); setUpdateScores({ home: '', away: '' });
   };
@@ -375,7 +386,7 @@ const App: React.FC = () => {
       updated.forEach(id => { if(id !== playerId) { setFixtures(prev => [...(prev || []), { id: Math.random().toString(36).substr(2, 9), league, homePlayerId: playerId, awayPlayerId: id, homeScore: null, awayScore: null, completed: false, date: new Date().toISOString() }, { id: Math.random().toString(36).substr(2, 9), league, homePlayerId: id, awayPlayerId: playerId, homeScore: null, awayScore: null, completed: false, date: new Date().toISOString() }]); }});
     } else if (league === 'champions' && groupId) {
       setClGroups(prev => (prev || []).map(g => {
-        if (g.id === groupId) {
+        if (g && g.id === groupId) {
           const updated = [...(g.playerIds || []), playerId];
           updated.forEach(id => { if(id !== playerId) { setFixtures(px => [...(px || []), { id: Math.random().toString(36).substr(2, 9), league, homePlayerId: playerId, awayPlayerId: id, homeScore: null, awayScore: null, completed: false, date: new Date().toISOString(), groupId }, { id: Math.random().toString(36).substr(2, 9), league, homePlayerId: id, awayPlayerId: playerId, homeScore: null, awayScore: null, completed: false, date: new Date().toISOString(), groupId }]); }});
           return { ...g, playerIds: updated };
@@ -388,7 +399,7 @@ const App: React.FC = () => {
 
   const savePlayer = (data: {name: string, sonyUsername: string, photoUrl: string}, league?: LeagueType, groupId?: string) => {
     if (!data.name) return;
-    if (showPlayerModal.player) setPlayers(prev => (prev || []).map(p => p.id === showPlayerModal.player!.id ? { ...p, ...data } : p));
+    if (showPlayerModal.player) setPlayers(prev => (prev || []).map(p => (p && p.id === showPlayerModal.player!.id) ? { ...p, ...data } : p));
     else { const newP: Player = { id: Date.now().toString(), ...data }; setPlayers(prev => [...(prev || []), newP]); if (league) addExistingPlayerToLeague(newP.id, league, groupId); }
     setTempUploadedPhoto(null); setShowPlayerModal({show: false});
   };
@@ -424,18 +435,18 @@ const App: React.FC = () => {
   };
 
   const updatePlayoffScore = (mode: LeagueType, matchId: string, s1: number, s2: number) => {
-    const key = mode === 'champions' ? 'champions' : mode as keyof PlayoffBrackets;
+    const key = (mode === 'champions' ? 'champions' : mode) as keyof PlayoffBrackets;
     const bracket = [...((playoffs && playoffs[key]) || [])];
-    const idx = bracket.findIndex(m => m.id === matchId);
+    const idx = bracket.findIndex(m => m && m.id === matchId);
     if (idx === -1 || s1 === s2) return;
     const match = { ...bracket[idx], score1: s1, score2: s2, winnerId: s1 > s2 ? bracket[idx].player1Id : bracket[idx].player2Id };
     bracket[idx] = match;
     if (match.round === 'quarter') {
-      const semis = bracket.filter(m => m.round === 'semi');
+      const semis = bracket.filter(m => m && m.round === 'semi');
       const target = semis[Math.floor(match.index / 2)];
       if (target) { if (match.index % 2 === 0) target.player1Id = match.winnerId; else target.player2Id = match.winnerId; }
     } else if (match.round === 'semi') {
-      const final = bracket.find(m => m.round === 'final');
+      const final = bracket.find(m => m && m.round === 'final');
       if (final) { if (match.index === 0) final.player1Id = match.winnerId; else final.player2Id = match.winnerId; }
     }
     setPlayoffs(prev => ({ ...(prev || { premier: [], national: [], champions: [] }), [key]: bracket }));
@@ -473,7 +484,7 @@ const App: React.FC = () => {
   };
 
   const PlayoffMatchUI: React.FC<{ match: PlayoffMatch, mode: LeagueType }> = ({ match, mode }) => {
-    const safePlayers = players || [];
+    const safePlayers = (players || []).filter(Boolean);
     const p1 = safePlayers.find(p => p.id === match.player1Id), p2 = safePlayers.find(p => p.id === match.player2Id);
     return (
       <div className="bg-slate-900 border border-slate-800 rounded-[2rem] p-4 w-60 shadow-2xl transition-all border-white/5 group text-white">
@@ -486,11 +497,11 @@ const App: React.FC = () => {
     );
   };
 
-  const safePlayers = players || [];
-  const safeFixtures = fixtures || [];
-  const safeHistory = history || [];
-  const safeHallOfFame = hallOfFame || [];
-  const safeClGroups = clGroups || [];
+  const safePlayers = (players || []).filter(Boolean);
+  const safeFixtures = (fixtures || []).filter(Boolean);
+  const safeHistory = (history || []).filter(Boolean);
+  const safeHallOfFame = (hallOfFame || []).filter(Boolean);
+  const safeClGroups = (clGroups || []).filter(Boolean);
 
   return (
     <div className="min-h-screen bg-black text-white pb-20 selection:bg-blue-600" dir="rtl">
@@ -561,9 +572,9 @@ const App: React.FC = () => {
             <div className="flex justify-center bg-slate-900/50 p-2 rounded-2xl border border-white/5 w-fit mx-auto gap-2">{['premier', 'national', 'champions'].map(m => (<button key={m} onClick={() => setPlayoffViewMode(m as LeagueType)} className={`px-8 py-3 rounded-xl text-[10px] font-black transition-all ${playoffViewMode === m ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500'}`}>{m === 'premier' ? 'ליגת העל' : m === 'national' ? 'לאומית' : "צ'מפיונס"}</button>))}</div>
             {((playoffs && (playoffViewMode === 'champions' ? playoffs.champions : playoffs[playoffViewMode as 'premier'|'national'])) || []).length === 0 ? (<div className="py-32 text-center bg-slate-900/20 border border-white/5 rounded-[4rem] flex flex-col items-center gap-6"><GitBranch size={64} className="text-slate-800" /><h3 className="text-2xl font-black text-slate-500">שלב הפלייאוף טרם הופעל</h3>{isAdmin && <button onClick={() => startLeaguePlayoffs(playoffViewMode)} className="bg-blue-600 text-white px-12 py-5 rounded-2xl font-black shadow-2xl active:scale-95 transition-all">צור שלב נוקאאוט (8 שחקנים)</button>}</div>) : (
                <div className="flex flex-row justify-between items-start py-10 gap-8 max-w-full mx-auto overflow-x-auto pb-10 px-4 min-h-[600px] no-scrollbar">
-                  <div className="flex flex-col gap-6 items-center shrink-0 pt-4"><span className="text-[10px] font-black text-blue-400 uppercase tracking-widest bg-blue-500/10 px-4 py-1.5 rounded-full border border-blue-500/20 mb-4">רבע גמר</span>{((playoffs && (playoffViewMode === 'champions' ? playoffs.champions : playoffs[playoffViewMode as 'premier'|'national'])) || []).filter(m => m.round === 'quarter').map(m => <PlayoffMatchUI key={m.id} match={m} mode={playoffViewMode} />)}</div>
-                  <div className="flex flex-col gap-12 items-center justify-around shrink-0 pt-20"><span className="text-[10px] font-black text-purple-400 uppercase tracking-widest bg-purple-500/10 px-4 py-1.5 rounded-full border border-purple-500/20 mb-4">חצי גמר</span>{((playoffs && (playoffViewMode === 'champions' ? playoffs.champions : playoffs[playoffViewMode as 'premier'|'national'])) || []).filter(m => m.round === 'semi').map(m => <PlayoffMatchUI key={m.id} match={m} mode={playoffViewMode} />)}</div>
-                  <div className="flex flex-col gap-12 items-center justify-center shrink-0 pt-40 scale-110"><span className="text-[10px] font-black text-yellow-500 uppercase tracking-widest bg-yellow-500/10 px-4 py-1.5 rounded-full border border-yellow-500/20 mb-8 animate-pulse">הגמר הגדול</span>{(() => { const final = ((playoffs && (playoffViewMode === 'champions' ? playoffs.champions : playoffs[playoffViewMode as 'premier'|'national'])) || []).find(m => m.round === 'final'); return final ? <PlayoffMatchUI match={final} mode={playoffViewMode} /> : null; })()}</div>
+                  <div className="flex flex-col gap-6 items-center shrink-0 pt-4"><span className="text-[10px] font-black text-blue-400 uppercase tracking-widest bg-blue-500/10 px-4 py-1.5 rounded-full border border-blue-500/20 mb-4">רבע גמר</span>{((playoffs && (playoffViewMode === 'champions' ? playoffs.champions : playoffs[playoffViewMode as 'premier'|'national'])) || []).filter(m => m && m.round === 'quarter').map(m => <PlayoffMatchUI key={m.id} match={m} mode={playoffViewMode} />)}</div>
+                  <div className="flex flex-col gap-12 items-center justify-around shrink-0 pt-20"><span className="text-[10px] font-black text-purple-400 uppercase tracking-widest bg-purple-500/10 px-4 py-1.5 rounded-full border border-purple-500/20 mb-4">חצי גמר</span>{((playoffs && (playoffViewMode === 'champions' ? playoffs.champions : playoffs[playoffViewMode as 'premier'|'national'])) || []).filter(m => m && m.round === 'semi').map(m => <PlayoffMatchUI key={m.id} match={m} mode={playoffViewMode} />)}</div>
+                  <div className="flex flex-col gap-12 items-center justify-center shrink-0 pt-40 scale-110"><span className="text-[10px] font-black text-yellow-500 uppercase tracking-widest bg-yellow-500/10 px-4 py-1.5 rounded-full border border-yellow-500/20 mb-8 animate-pulse">הגמר הגדול</span>{(() => { const final = ((playoffs && (playoffViewMode === 'champions' ? playoffs.champions : playoffs[playoffViewMode as 'premier'|'national'])) || []).find(m => m && m.round === 'final'); return final ? <PlayoffMatchUI match={final} mode={playoffViewMode} /> : null; })()}</div>
                </div>
             )}
           </section>
@@ -605,7 +616,7 @@ const App: React.FC = () => {
              <div className="bg-slate-900/60 p-10 rounded-[3rem] border border-white/5 space-y-8 shadow-2xl">
                 <h3 className="text-xl font-black flex items-center gap-4 text-blue-500 flex-row-reverse"><UserPlus size={28} /> הוספת שחקנים לליגות</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-                   <button onClick={() => { setPlayerModalTab('new'); setShowPlayerModal({show: true, league: 'premier'}); }} className="bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 p-8 rounded-[2rem] border border-blue-500/20 font-black text-sm flex flex-col items-center gap-4 transition-all active:scale-95"><Award size={32} /> <span>ליגת על</span></button>
+                   <button onClick={() => { setPlayerModalTab('new'); setShowPlayerModal({show: true, league: 'premier'}); }} className="bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 p-8 rounded-[2rem] border border-blue-500/20 font-black text-sm flex flex-col items-center gap-4 transition-all active:scale-95"><Award size={32} /> <span>ליגת העל</span></button>
                    <button onClick={() => { setPlayerModalTab('new'); setShowPlayerModal({show: true, league: 'national'}); }} className="bg-slate-800/50 hover:bg-slate-800 text-slate-400 p-8 rounded-[2rem] border border-white/5 font-black text-sm flex flex-col items-center gap-4 transition-all active:scale-95"><BarChart3 size={32} /> <span>הלאומית</span></button>
                    <div className="grid grid-cols-2 gap-2">
                       {safeClGroups.map((group) => (<button key={group.id} onClick={() => { setPlayerModalTab('new'); setShowPlayerModal({show: true, league: 'champions', groupId: group.id}); }} className="bg-blue-400/5 hover:bg-blue-400/10 text-blue-400 p-4 rounded-[1.5rem] border border-white/5 font-black text-[10px] flex flex-col items-center gap-1 transition-all active:scale-95"><Zap size={16} /><span>{group.name}</span></button>))}
@@ -749,7 +760,7 @@ const App: React.FC = () => {
       {showPlayerModal.show && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-6 backdrop-blur-md">
            <div className="absolute inset-0 bg-black/80" onClick={() => setShowPlayerModal({show: false})} />
-           <div className="bg-slate-900 border border-white/10 p-1 rounded-[3rem] shadow-2xl relative w-full max-w-md animate-in zoom-in-95 duration-300 overflow-hidden">
+           <div className="bg-slate-900 border border-white/10 p-1 rounded-[3rem] shadow-2xl relative w-full max-md animate-in zoom-in-95 duration-300 overflow-hidden">
               <div className="bg-slate-950 p-10 space-y-6 text-right">
                 <div className="flex justify-between items-center"><h2 className="text-2xl font-black flex items-center gap-4 text-white"><UserPlus className="text-blue-500" size={28} /> {showPlayerModal.player ? 'עריכת שחקן' : 'הוספת שחקן'}</h2><button onClick={() => setShowPlayerModal({show: false})} className="text-slate-500 hover:text-white"><X size={24}/></button></div>
                 {!showPlayerModal.player && (<div className="flex bg-black/40 p-1 rounded-2xl border border-white/5"><button onClick={() => setPlayerModalTab('new')} className={`flex-1 py-3 rounded-xl text-xs font-black transition-all ${playerModalTab === 'new' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500'}`}>שחקן חדש</button><button onClick={() => setPlayerModalTab('existing')} className={`flex-1 py-3 rounded-xl text-xs font-black transition-all ${playerModalTab === 'existing' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500'}`}>קיים במערכת</button></div>)}
