@@ -10,23 +10,6 @@
     <!-- Firebase SDKs (Compat version for global access) -->
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-    
-    <script>
-      // Initialize Firebase via CDN
-      const firebaseConfig = { 
-        apiKey: 'AIzaSyCek-mi-06hyatPu8_ctRKSeuKcUmL1Zkk', 
-        databaseURL: 'https://ifl26-3998d-default-rtdb.firebaseio.com' 
-      };
-      
-      try {
-        if (typeof firebase !== 'undefined') {
-          firebase.initializeApp(firebaseConfig);
-          console.log("Firebase initialized successfully via CDN");
-        }
-      } catch (e) {
-        console.error("Firebase Initialization Error:", e);
-      }
-    </script>
 
     <style>
       body {

@@ -118,7 +118,7 @@ const App: React.FC = () => {
 
   const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
 
-  // STORAGE (Hooks already handle initialization)
+  // STORAGE
   const [players, setPlayers] = useLocalStorage<Player[]>(STORAGE_KEYS.PLAYERS, []);
   const [premierPlayerIds, setPremierPlayerIds] = useLocalStorage<string[]>(STORAGE_KEYS.PREMIER_IDS, []);
   const [nationalPlayerIds, setNationalPlayerIds] = useLocalStorage<string[]>(STORAGE_KEYS.NATIONAL_IDS, []);
@@ -144,6 +144,24 @@ const App: React.FC = () => {
     if (!firebase) return;
 
     try {
+      // Safely access env variables
+      const meta = (import.meta as any);
+      const firebaseApiKey = meta.env?.VITE_FIREBASE_API_KEY;
+      const firebaseDbUrl = meta.env?.VITE_FIREBASE_DATABASE_URL;
+
+      if (!firebase.apps.length && firebaseApiKey && firebaseDbUrl) {
+        firebase.initializeApp({
+          apiKey: firebaseApiKey,
+          databaseURL: firebaseDbUrl
+        });
+      }
+
+      // Check if initialized before proceeding
+      if (!firebase.apps.length) {
+        console.warn("Firebase not initialized: Missing configuration keys in import.meta.env");
+        return;
+      }
+
       const db = firebase.database();
       const mainRef = db.ref('ifl_global_v2');
       const connRef = db.ref('.info/connected');
@@ -187,7 +205,7 @@ const App: React.FC = () => {
   useEffect(() => {
     if (isCloudConnected && !ignorePushFromCloud.current && !isSyncing) {
       const firebase = (window as any).firebase;
-      if (firebase) {
+      if (firebase && firebase.apps.length) {
         try {
           const db = firebase.database();
           db.ref('ifl_global_v2').set({
@@ -581,7 +599,7 @@ const App: React.FC = () => {
              <div className="bg-slate-900/60 p-10 rounded-[3rem] border border-white/5 space-y-8 shadow-2xl">
                 <h3 className="text-xl font-black flex items-center gap-4 text-blue-500 flex-row-reverse"><UserPlus size={28} /> הוספת שחקנים לליגות</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-                   <button onClick={() => { setPlayerModalTab('new'); setShowPlayerModal({show: true, league: 'premier'}); }} className="bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 p-8 rounded-[2rem] border border-blue-500/20 font-black text-sm flex flex-col items-center gap-4 transition-all active:scale-95"><Award size={32} /> <span>ליגת על</span></button>
+                   <button onClick={() => { setPlayerModalTab('new'); setShowPlayerModal({show: true, league: 'premier'}); }} className="bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 p-8 rounded-[2rem] border border-blue-500/20 font-black text-sm flex flex-col items-center gap-4 transition-all active:scale-95"><Award size={32} /> <span>ליגת העל</span></button>
                    <button onClick={() => { setPlayerModalTab('new'); setShowPlayerModal({show: true, league: 'national'}); }} className="bg-slate-800/50 hover:bg-slate-800 text-slate-400 p-8 rounded-[2rem] border border-white/5 font-black text-sm flex flex-col items-center gap-4 transition-all active:scale-95"><BarChart3 size={32} /> <span>הלאומית</span></button>
                    <div className="grid grid-cols-2 gap-2">
                       {safeClGroups.map((group) => (<button key={group.id} onClick={() => { setPlayerModalTab('new'); setShowPlayerModal({show: true, league: 'champions', groupId: group.id}); }} className="bg-blue-400/5 hover:bg-blue-400/10 text-blue-400 p-4 rounded-[1.5rem] border border-white/5 font-black text-[10px] flex flex-col items-center gap-1 transition-all active:scale-95"><Zap size={16} /><span>{group.name}</span></button>))}
@@ -750,7 +768,7 @@ const App: React.FC = () => {
       {showHOFModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-6 backdrop-blur-md">
            <div className="absolute inset-0 bg-black/80" onClick={() => setShowHOFModal(false)} />
-           <div className="bg-slate-900 p-10 rounded-[3rem] border border-white/10 shadow-2xl relative w-full max-w-sm animate-in zoom-in-95 duration-300">
+           <div className="bg-slate-900 p-10 rounded-[3rem] border border-white/10 shadow-2xl relative w-full max-sm animate-in zoom-in-95 duration-300">
               <h2 className="text-2xl font-black mb-8 text-yellow-500 flex items-center gap-3 text-right flex-row-reverse"><Crown size={28} /> היכל התהילה</h2>
               <div className="space-y-5 text-right">
                  <div className="space-y-2"><label className="text-[10px] font-black text-slate-500 mr-2 uppercase">Legend Name</label><input id="hof-player" placeholder="שם האגדה" className="w-full bg-black border border-white/5 rounded-2xl p-5 font-black text-white text-right outline-none focus:border-yellow-500" list="current-players" /><datalist id="current-players">{safePlayers.map(p => <option key={p.id} value={p.name} />)}</datalist></div>
