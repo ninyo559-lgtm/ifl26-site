@@ -60,7 +60,11 @@ function useLocalStorage<T>(key: string, initialValue: T): [T, React.Dispatch<Re
   });
 
   useEffect(() => {
-    window.localStorage.setItem(key, JSON.stringify(storedValue));
+    try {
+      window.localStorage.setItem(key, JSON.stringify(storedValue));
+    } catch (e) {
+      console.warn('Storage failed', e);
+    }
   }, [key, storedValue]);
 
   return [storedValue, setStoredValue];
@@ -140,36 +144,36 @@ const App: React.FC = () => {
   const ignorePushFromCloud = useRef(false);
 
   useEffect(() => {
+    // 1. Get Firebase and Env securely
     const firebase = (window as any).firebase;
     if (!firebase) return;
 
     try {
-      // Safely access env variables
-      const meta = (import.meta as any);
-      const firebaseApiKey = meta.env?.VITE_FIREBASE_API_KEY;
-      const firebaseDbUrl = meta.env?.VITE_FIREBASE_DATABASE_URL;
+      // Accessing env variables defensively for Vite/Netlify
+      const env = (import.meta as any).env || {};
+      const apiKey = env.VITE_FIREBASE_API_KEY;
+      const databaseURL = env.VITE_FIREBASE_DATABASE_URL;
 
-      if (!firebase.apps.length && firebaseApiKey && firebaseDbUrl) {
-        firebase.initializeApp({
-          apiKey: firebaseApiKey,
-          databaseURL: firebaseDbUrl
-        });
+      if (!apiKey || !databaseURL) {
+        console.warn("Firebase Keys Missing: Check Netlify environment variables (VITE_FIREBASE_API_KEY). Proceeding in offline mode.");
+        return;
       }
 
-      // Check if initialized before proceeding
-      if (!firebase.apps.length) {
-        console.warn("Firebase not initialized: Missing configuration keys in import.meta.env");
-        return;
+      // Initialize App if not already started
+      if (!firebase.apps || firebase.apps.length === 0) {
+        firebase.initializeApp({ apiKey, databaseURL });
       }
 
       const db = firebase.database();
       const mainRef = db.ref('ifl_global_v2');
       const connRef = db.ref('.info/connected');
 
+      // Connection state listener
       connRef.on('value', (snap: any) => {
         setIsCloudConnected(snap.val() === true);
       });
 
+      // Data listener
       mainRef.on('value', (snapshot: any) => {
         const data = snapshot.val();
         if (data) {
@@ -198,14 +202,15 @@ const App: React.FC = () => {
         connRef.off();
       };
     } catch (e) {
-      console.error("Firebase Sync Error:", e);
+      console.error("Firebase Sync Critical Error:", e);
     }
   }, []);
 
+  // Outgoing sync
   useEffect(() => {
     if (isCloudConnected && !ignorePushFromCloud.current && !isSyncing) {
       const firebase = (window as any).firebase;
-      if (firebase && firebase.apps.length) {
+      if (firebase && firebase.apps && firebase.apps.length > 0) {
         try {
           const db = firebase.database();
           db.ref('ifl_global_v2').set({
@@ -248,7 +253,7 @@ const App: React.FC = () => {
       stats[p.id] = { id: p.id, name: p.name, team: p.sonyUsername || 'PSN', gp: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, gd: 0, pts: 0 };
     });
     
-    safeFixtures.filter(f => f.league === league && (!groupId || f.groupId === groupId) && f.completed).forEach(f => {
+    safeFixtures.filter(f => f && f.league === league && (!groupId || f.groupId === groupId) && f.completed).forEach(f => {
       if (!stats[f.homePlayerId] || !stats[f.awayPlayerId]) return;
       const h = f.homeScore || 0, a = f.awayScore || 0;
       stats[f.homePlayerId].gp += 1; stats[f.awayPlayerId].gp += 1;
@@ -262,6 +267,7 @@ const App: React.FC = () => {
   };
 
   const getPlayersNotInLeague = (league: LeagueType, groupId?: string): Player[] => {
+    const safePlayers = players || [];
     let excludedIds: string[] = [];
     if (league === 'premier') excludedIds = premierPlayerIds || [];
     else if (league === 'national') excludedIds = nationalPlayerIds || [];
@@ -269,7 +275,7 @@ const App: React.FC = () => {
       const group = (clGroups || []).find(g => g.id === groupId);
       excludedIds = group ? (group.playerIds || []) : [];
     }
-    return (players || []).filter(p => !excludedIds.includes(p.id));
+    return safePlayers.filter(p => !excludedIds.includes(p.id));
   };
 
   const premierStats = useMemo(() => calculateTable('premier'), [fixtures, players, premierPlayerIds]);
@@ -316,7 +322,7 @@ const App: React.FC = () => {
       if (active) stats.activeSeasons += 1;
     });
     if ((premierPlayerIds || []).includes(playerId) || (nationalPlayerIds || []).includes(playerId)) stats.activeSeasons += 1;
-    stats.streak = safeFixtures.filter(f => f.completed && (f.homePlayerId === playerId || f.awayPlayerId === playerId)).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 5).map(f => {
+    stats.streak = safeFixtures.filter(f => f && f.completed && (f.homePlayerId === playerId || f.awayPlayerId === playerId)).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 5).map(f => {
       const isHome = f.homePlayerId === playerId;
       const my = isHome ? (f.homeScore || 0) : (f.awayScore || 0);
       const opp = isHome ? (f.awayScore || 0) : (f.homeScore || 0);
@@ -335,7 +341,7 @@ const App: React.FC = () => {
     if (league === 'premier') setPremierPlayerIds(prev => (prev || []).filter(pid => pid !== id));
     else if (league === 'national') setNationalPlayerIds(prev => (prev || []).filter(pid => pid !== id));
     else if (league === 'champions' && groupId) setClGroups(prev => (prev || []).map(g => g.id === groupId ? { ...g, playerIds: (g.playerIds || []).filter(pid => pid !== id) } : g));
-    setFixtures(prev => (prev || []).filter(f => !(f.league === league && (!groupId || f.groupId === groupId) && (f.homePlayerId === id || f.awayPlayerId === id) && !f.completed)));
+    setFixtures(prev => (prev || []).filter(f => f && !(f.league === league && (!groupId || f.groupId === groupId) && (f.homePlayerId === id || f.awayPlayerId === id) && !f.completed)));
     setPlayerToRemoveFromLeague(null);
   };
 
@@ -344,7 +350,7 @@ const App: React.FC = () => {
     setPremierPlayerIds(prev => (prev || []).filter(pid => pid !== id));
     setNationalPlayerIds(prev => (prev || []).filter(pid => pid !== id));
     setClGroups(prev => (prev || []).map(g => ({ ...g, playerIds: (g.playerIds || []).filter(pid => pid !== id) })));
-    setFixtures(prev => (prev || []).filter(f => f.homePlayerId !== id && f.awayPlayerId !== id));
+    setFixtures(prev => (prev || []).filter(f => f && f.homePlayerId !== id && f.awayPlayerId !== id));
     setPlayerToDelete(null);
   };
 
@@ -352,7 +358,7 @@ const App: React.FC = () => {
     if (!fixtureToUpdate || !isAdmin) return;
     const h = parseInt(updateScores.home), a = parseInt(updateScores.away);
     if (isNaN(h) || isNaN(a)) return;
-    setFixtures(prev => (prev || []).map(f => f.id === fixtureToUpdate.id ? { ...f, homeScore: h, awayScore: a, completed: true } : f));
+    setFixtures(prev => (prev || []).map(f => f && f.id === fixtureToUpdate.id ? { ...f, homeScore: h, awayScore: a, completed: true } : f));
     ['premier', 'national', 'champions'].forEach(lk => { 
       const bracket = (playoffs && playoffs[lk as keyof PlayoffBrackets]) || [];
       if (bracket.some(m => m.id === fixtureToUpdate.id)) updatePlayoffScore(lk as LeagueType, fixtureToUpdate.id, h, a); 
@@ -451,11 +457,11 @@ const App: React.FC = () => {
   );
 
   const TableRow: React.FC<{ p: PlayerStats, idx: number }> = ({ p, idx }) => {
-    const playerObj = (players || []).find(px => px.id === p.id);
+    const playerObj = (players || []).find(px => px && px.id === p.id);
     return (
       <tr onClick={() => playerObj && setSelectedPlayerInfo(playerObj)} className="hover:bg-slate-800/30 transition-all border-b border-white/5 last:border-0 cursor-pointer">
         <td className="px-2 py-4 text-center"><span className={`w-6 h-6 md:w-7 md:h-7 inline-flex items-center justify-center rounded-lg font-black text-[10px] md:text-[11px] ${idx === 0 ? 'bg-yellow-500 text-black' : 'bg-slate-800 text-slate-500'}`}>{idx + 1}</span></td>
-        <td className="px-4 py-4"><div className="flex items-center gap-2 md:gap-4 text-right truncate"><div className="w-8 h-8 rounded-xl overflow-hidden bg-slate-800 border border-white/5 shrink-0">{playerObj?.photoUrl ? <img src={playerObj.photoUrl} className="w-full h-full object-cover" /> : <UserIcon size={14} className="m-auto mt-2 text-slate-600" />}</div><span className="font-black text-xs md:text-sm text-white truncate">{p.name}</span></div></td>
+        <td className="px-4 py-4"><div className="flex items-center gap-2 md:gap-4 text-right truncate"><div className="w-8 h-8 rounded-xl overflow-hidden bg-slate-800 border border-white/5 shrink-0">{playerObj?.photoUrl ? <img src={playerObj.photoUrl} className="w-full h-full object-cover" alt={p.name} /> : <UserIcon size={14} className="m-auto mt-2 text-slate-600" />}</div><span className="font-black text-xs md:text-sm text-white truncate">{p.name}</span></div></td>
         <td className="px-2 py-4 text-center text-[10px] font-bold text-slate-400">{p.gp}</td>
         <td className="px-2 py-4 text-center text-[10px] font-black text-green-500/80">{p.w}</td>
         <td className="px-2 py-4 text-center text-[10px] font-bold text-slate-500">{p.d}</td>
@@ -500,8 +506,8 @@ const App: React.FC = () => {
              <div className="relative group"><Search className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-blue-500 transition-colors" size={16} /><input type="text" placeholder="חיפוש שחקן..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onFocus={() => setShowSearchResults(true)} className="w-full bg-slate-900/40 border border-white/5 rounded-xl py-3 pr-11 pl-4 text-xs font-black text-white outline-none focus:border-blue-500/30 transition-all" /></div>
              {showSearchResults && searchQuery && (
                 <div className="absolute top-full mt-2 left-0 right-0 bg-slate-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-50">
-                   {safePlayers.filter(p => p.name.includes(searchQuery)).slice(0, 5).map(p => (
-                      <button key={p.id} onClick={() => { setSelectedPlayerInfo(p); setShowSearchResults(false); setSearchQuery(''); }} className="w-full flex items-center gap-4 p-3 hover:bg-white/5 border-b border-white/5 last:border-0 text-right"><div className="w-8 h-8 rounded-lg bg-slate-800 overflow-hidden">{p.photoUrl ? <img src={p.photoUrl} className="w-full h-full object-cover" /> : <UserIcon size={14} className="m-auto mt-2 text-slate-600" />}</div><div className="flex-1"><div className="font-black text-xs">{p.name}</div><div className="text-[8px] text-slate-500">{p.sonyUsername}</div></div><ChevronRight size={14} className="text-slate-700" /></button>
+                   {safePlayers.filter(p => p && p.name.includes(searchQuery)).slice(0, 5).map(p => (
+                      <button key={p.id} onClick={() => { setSelectedPlayerInfo(p); setShowSearchResults(false); setSearchQuery(''); }} className="w-full flex items-center gap-4 p-3 hover:bg-white/5 border-b border-white/5 last:border-0 text-right"><div className="w-8 h-8 rounded-lg bg-slate-800 overflow-hidden">{p.photoUrl ? <img src={p.photoUrl} className="w-full h-full object-cover" alt={p.name} /> : <UserIcon size={14} className="m-auto mt-2 text-slate-600" />}</div><div className="flex-1"><div className="font-black text-xs">{p.name}</div><div className="text-[8px] text-slate-500">{p.sonyUsername}</div></div><ChevronRight size={14} className="text-slate-700" /></button>
                    ))}
                 </div>
              )}
@@ -553,11 +559,11 @@ const App: React.FC = () => {
         {activeTab === 'playoffs' && (
           <section className="space-y-12">
             <div className="flex justify-center bg-slate-900/50 p-2 rounded-2xl border border-white/5 w-fit mx-auto gap-2">{['premier', 'national', 'champions'].map(m => (<button key={m} onClick={() => setPlayoffViewMode(m as LeagueType)} className={`px-8 py-3 rounded-xl text-[10px] font-black transition-all ${playoffViewMode === m ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500'}`}>{m === 'premier' ? 'ליגת העל' : m === 'national' ? 'לאומית' : "צ'מפיונס"}</button>))}</div>
-            {((playoffs && playoffs[playoffViewMode === 'champions' ? 'champions' : playoffViewMode as keyof PlayoffBrackets]) || []).length === 0 ? (<div className="py-32 text-center bg-slate-900/20 border border-white/5 rounded-[4rem] flex flex-col items-center gap-6"><GitBranch size={64} className="text-slate-800" /><h3 className="text-2xl font-black text-slate-500">שלב הפלייאוף טרם הופעל</h3>{isAdmin && <button onClick={() => startLeaguePlayoffs(playoffViewMode)} className="bg-blue-600 text-white px-12 py-5 rounded-2xl font-black shadow-2xl active:scale-95 transition-all">צור שלב נוקאאוט (8 שחקנים)</button>}</div>) : (
+            {((playoffs && (playoffViewMode === 'champions' ? playoffs.champions : playoffs[playoffViewMode as 'premier'|'national'])) || []).length === 0 ? (<div className="py-32 text-center bg-slate-900/20 border border-white/5 rounded-[4rem] flex flex-col items-center gap-6"><GitBranch size={64} className="text-slate-800" /><h3 className="text-2xl font-black text-slate-500">שלב הפלייאוף טרם הופעל</h3>{isAdmin && <button onClick={() => startLeaguePlayoffs(playoffViewMode)} className="bg-blue-600 text-white px-12 py-5 rounded-2xl font-black shadow-2xl active:scale-95 transition-all">צור שלב נוקאאוט (8 שחקנים)</button>}</div>) : (
                <div className="flex flex-row justify-between items-start py-10 gap-8 max-w-full mx-auto overflow-x-auto pb-10 px-4 min-h-[600px] no-scrollbar">
-                  <div className="flex flex-col gap-6 items-center shrink-0 pt-4"><span className="text-[10px] font-black text-blue-400 uppercase tracking-widest bg-blue-500/10 px-4 py-1.5 rounded-full border border-blue-500/20 mb-4">רבע גמר</span>{(playoffs && playoffs[playoffViewMode === 'champions' ? 'champions' : playoffViewMode as keyof PlayoffBrackets] || []).filter(m => m.round === 'quarter').map(m => <PlayoffMatchUI key={m.id} match={m} mode={playoffViewMode} />)}</div>
-                  <div className="flex flex-col gap-12 items-center justify-around shrink-0 pt-20"><span className="text-[10px] font-black text-purple-400 uppercase tracking-widest bg-purple-500/10 px-4 py-1.5 rounded-full border border-purple-500/20 mb-4">חצי גמר</span>{(playoffs && playoffs[playoffViewMode === 'champions' ? 'champions' : playoffViewMode as keyof PlayoffBrackets] || []).filter(m => m.round === 'semi').map(m => <PlayoffMatchUI key={m.id} match={m} mode={playoffViewMode} />)}</div>
-                  <div className="flex flex-col gap-12 items-center justify-center shrink-0 pt-40 scale-110"><span className="text-[10px] font-black text-yellow-500 uppercase tracking-widest bg-yellow-500/10 px-4 py-1.5 rounded-full border border-yellow-500/20 mb-8 animate-pulse">הגמר הגדול</span>{(() => { const final = (playoffs && playoffs[playoffViewMode === 'champions' ? 'champions' : playoffViewMode as keyof PlayoffBrackets] || []).find(m => m.round === 'final'); return final ? <PlayoffMatchUI match={final} mode={playoffViewMode} /> : null; })()}</div>
+                  <div className="flex flex-col gap-6 items-center shrink-0 pt-4"><span className="text-[10px] font-black text-blue-400 uppercase tracking-widest bg-blue-500/10 px-4 py-1.5 rounded-full border border-blue-500/20 mb-4">רבע גמר</span>{((playoffs && (playoffViewMode === 'champions' ? playoffs.champions : playoffs[playoffViewMode as 'premier'|'national'])) || []).filter(m => m.round === 'quarter').map(m => <PlayoffMatchUI key={m.id} match={m} mode={playoffViewMode} />)}</div>
+                  <div className="flex flex-col gap-12 items-center justify-around shrink-0 pt-20"><span className="text-[10px] font-black text-purple-400 uppercase tracking-widest bg-purple-500/10 px-4 py-1.5 rounded-full border border-purple-500/20 mb-4">חצי גמר</span>{((playoffs && (playoffViewMode === 'champions' ? playoffs.champions : playoffs[playoffViewMode as 'premier'|'national'])) || []).filter(m => m.round === 'semi').map(m => <PlayoffMatchUI key={m.id} match={m} mode={playoffViewMode} />)}</div>
+                  <div className="flex flex-col gap-12 items-center justify-center shrink-0 pt-40 scale-110"><span className="text-[10px] font-black text-yellow-500 uppercase tracking-widest bg-yellow-500/10 px-4 py-1.5 rounded-full border border-yellow-500/20 mb-8 animate-pulse">הגמר הגדול</span>{(() => { const final = ((playoffs && (playoffViewMode === 'champions' ? playoffs.champions : playoffs[playoffViewMode as 'premier'|'national'])) || []).find(m => m.round === 'final'); return final ? <PlayoffMatchUI match={final} mode={playoffViewMode} /> : null; })()}</div>
                </div>
             )}
           </section>
@@ -569,7 +575,7 @@ const App: React.FC = () => {
                 <div className="flex items-center gap-6"><h2 className="text-2xl font-black flex items-center gap-3"><Calendar className="text-blue-500" /> משחקי העונה</h2><div className="flex bg-slate-900 p-1 rounded-xl border border-white/5">{[{ id: 'premier', label: 'ליגת על' }, { id: 'national', label: 'לאומית' }, { id: 'champions', label: "צ'מפיונס" }].map(f => <button key={f.id} onClick={() => setFixtureSubTab(f.id as LeagueType)} className={`px-4 py-2 rounded-lg text-[10px] font-black transition-all ${fixtureSubTab === f.id ? 'bg-blue-600 text-white' : 'text-slate-500'}`}>{f.label}</button>)}</div></div>
                 <div className="relative w-full md:w-80 group"><Search className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-blue-500 transition-colors" size={16} /><input type="text" placeholder="חיפוש לפי שחקן..." value={fixtureSearchQuery} onChange={(e) => setFixtureSearchQuery(e.target.value)} className="w-full bg-slate-900 border border-white/5 rounded-xl pr-12 pl-4 py-3 text-xs font-black outline-none focus:border-blue-500/30 transition-all text-white" /></div>
              </div>
-             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{safeFixtures.filter(f => { if (f.league !== fixtureSubTab) return false; const p1 = safePlayers.find(p => p.id === f.homePlayerId), p2 = safePlayers.find(p => p.id === f.awayPlayerId); const q = fixtureSearchQuery.toLowerCase(); return !q || p1?.name.toLowerCase().includes(q) || p2?.name.toLowerCase().includes(q); }).sort((a,b) => Number(a.completed) - Number(b.completed)).map(f => { const p1 = safePlayers.find(p => p.id === f.homePlayerId), p2 = safePlayers.find(p => p.id === f.awayPlayerId); if(!p1 || !p2) return null; return (<button key={f.id} disabled={!isAdmin} onClick={() => { setFixtureToUpdate(f); setUpdateScores({ home: f.homeScore?.toString() || '', away: f.awayScore?.toString() || '' }); }} className={`bg-slate-900/50 border ${f.completed ? 'border-green-500/10' : 'border-white/5'} p-6 rounded-[2rem] transition-all hover:bg-slate-900 relative text-right w-full block group`}><div className="flex justify-between text-[8px] font-black text-slate-500 uppercase tracking-widest mb-6"><span>{f.league === 'champions' ? `בית ${f.groupId}` : f.league === 'premier' ? 'ליגת על' : 'לאומית'}</span><span>{new Date(f.date).toLocaleDateString('he-IL')}</span></div><div className="flex items-center justify-between gap-4"><div className="flex-1 flex items-center gap-4"><div className="w-10 h-10 rounded-xl bg-slate-800 shrink-0 shadow-lg overflow-hidden">{p1.photoUrl ? <img src={p1.photoUrl} className="w-full h-full object-cover" /> : <UserIcon size={14} className="m-auto mt-3 text-slate-600" />}</div><span className="font-black text-xs truncate max-w-[80px] text-right text-white">{p1.name}</span></div><div className="bg-black/40 px-4 py-3 rounded-2xl border border-white/5 shrink-0 flex items-center gap-4 shadow-inner">{f.completed ? <><span className="text-lg font-black text-white">{f.homeScore}</span><span className="text-slate-700">:</span><span className="text-lg font-black text-white">{f.awayScore}</span></> : isAdmin ? <span className="text-[10px] font-black text-blue-500 px-4 group-hover:scale-110 transition-transform">עדכן תוצאה</span> : <span className="text-[10px] font-black text-slate-700 tracking-[0.2em]">VS</span>}</div><div className="flex-1 flex items-center gap-4 justify-end text-left"><span className="font-black text-xs truncate max-w-[80px] text-left text-white">{p2.name}</span><div className="w-10 h-10 rounded-xl bg-slate-800 shrink-0 shadow-lg overflow-hidden">{p2.photoUrl ? <img src={p2.photoUrl} className="w-full h-full object-cover" /> : <UserIcon size={14} className="m-auto mt-3 text-slate-600" />}</div></div></div></button>);})}</div>
+             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{safeFixtures.filter(f => { if (!f || f.league !== fixtureSubTab) return false; const p1 = safePlayers.find(p => p.id === f.homePlayerId), p2 = safePlayers.find(p => p.id === f.awayPlayerId); const q = fixtureSearchQuery.toLowerCase(); return !q || p1?.name.toLowerCase().includes(q) || p2?.name.toLowerCase().includes(q); }).sort((a,b) => Number(a.completed) - Number(b.completed)).map(f => { const p1 = safePlayers.find(p => p.id === f.homePlayerId), p2 = safePlayers.find(p => p.id === f.awayPlayerId); if(!p1 || !p2) return null; return (<button key={f.id} disabled={!isAdmin} onClick={() => { setFixtureToUpdate(f); setUpdateScores({ home: f.homeScore?.toString() || '', away: f.awayScore?.toString() || '' }); }} className={`bg-slate-900/50 border ${f.completed ? 'border-green-500/10' : 'border-white/5'} p-6 rounded-[2rem] transition-all hover:bg-slate-900 relative text-right w-full block group`}><div className="flex justify-between text-[8px] font-black text-slate-500 uppercase tracking-widest mb-6"><span>{f.league === 'champions' ? `בית ${f.groupId}` : f.league === 'premier' ? 'ליגת על' : 'לאומית'}</span><span>{new Date(f.date).toLocaleDateString('he-IL')}</span></div><div className="flex items-center justify-between gap-4"><div className="flex-1 flex items-center gap-4"><div className="w-10 h-10 rounded-xl bg-slate-800 shrink-0 shadow-lg overflow-hidden">{p1.photoUrl ? <img src={p1.photoUrl} className="w-full h-full object-cover" alt={p1.name} /> : <UserIcon size={14} className="m-auto mt-3 text-slate-600" />}</div><span className="font-black text-xs truncate max-w-[80px] text-right text-white">{p1.name}</span></div><div className="bg-black/40 px-4 py-3 rounded-2xl border border-white/5 shrink-0 flex items-center gap-4 shadow-inner">{f.completed ? <><span className="text-lg font-black text-white">{f.homeScore}</span><span className="text-slate-700">:</span><span className="text-lg font-black text-white">{f.awayScore}</span></> : isAdmin ? <span className="text-[10px] font-black text-blue-500 px-4 group-hover:scale-110 transition-transform">עדכן תוצאה</span> : <span className="text-[10px] font-black text-slate-700 tracking-[0.2em]">VS</span>}</div><div className="flex-1 flex items-center gap-4 justify-end text-left"><span className="font-black text-xs truncate max-w-[80px] text-left text-white">{p2.name}</span><div className="w-10 h-10 rounded-xl bg-slate-800 shrink-0 shadow-lg overflow-hidden">{p2.photoUrl ? <img src={p2.photoUrl} className="w-full h-full object-cover" alt={p2.name} /> : <UserIcon size={14} className="m-auto mt-3 text-slate-600" />}</div></div></div></button>);})}</div>
           </section>
         )}
 
@@ -585,7 +591,7 @@ const App: React.FC = () => {
         {activeTab === 'hof' && (
           <section className="space-y-10">
              <div className="flex justify-between items-center px-4"><h2 className="text-3xl font-black flex items-center gap-4 text-yellow-500 italic"><Crown size={32} /> היכל התהילה</h2>{isAdmin && <button onClick={() => setShowHOFModal(true)} className="bg-yellow-600 text-black px-8 py-3.5 rounded-2xl font-black text-xs shadow-xl active:scale-95 transition-all">אגדה חדשה</button>}</div>
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">{safeHallOfFame.map(e => (<div key={e.id} className="bg-slate-900/60 border border-yellow-500/20 p-10 rounded-[3rem] relative group overflow-hidden"><div className="flex items-center gap-8"><div className="bg-yellow-500/10 p-5 rounded-[1.5rem] text-yellow-500 border border-yellow-500/20 shadow-inner group-hover:rotate-12 transition-transform duration-500"><Trophy size={48} /></div><div className="text-right flex-1"><h3 className="text-3xl font-black text-white">{e.playerName}</h3><p className="text-yellow-500 font-black text-xs uppercase tracking-widest mt-1 italic">{e.achievement}</p><div className="flex items-center gap-2 text-slate-600 font-black text-[9px] uppercase mt-3 bg-white/5 px-3 py-1 rounded-full w-fit mr-auto"><Calendar size={12}/> {e.season}</div></div></div>{isAdmin && <button onClick={() => setHallOfFame(prev => (prev || []).filter(x => x.id !== e.id))} className="absolute top-8 left-8 text-slate-700 hover:text-red-500 transition-colors"><Trash2 size={20} /></button>}</div>))}</div>
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">{safeHallOfFame.map(e => (<div key={e.id} className="bg-slate-900/60 border border-yellow-500/20 p-10 rounded-[3rem] relative group overflow-hidden"><div className="flex items-center gap-8"><div className="bg-yellow-500/10 p-5 rounded-[1.5rem] text-yellow-500 border border-yellow-500/20 shadow-inner group-hover:rotate-12 transition-transform duration-500"><Trophy size={48} /></div><div className="text-right flex-1"><h3 className="text-3xl font-black text-white">{e.playerName}</h3><p className="text-yellow-500 font-black text-xs uppercase tracking-widest mt-1 italic">{e.achievement}</p><div className="flex items-center gap-2 text-slate-600 font-black text-[9px] uppercase mt-3 bg-white/5 px-3 py-1 rounded-full w-fit mr-auto"><Calendar size={12}/> {e.season}</div></div></div>{isAdmin && <button onClick={() => setHallOfFame(prev => (prev || []).filter(x => x && x.id !== e.id))} className="absolute top-8 left-8 text-slate-700 hover:text-red-500 transition-colors"><Trash2 size={20} /></button>}</div>))}</div>
           </section>
         )}
 
@@ -599,7 +605,7 @@ const App: React.FC = () => {
              <div className="bg-slate-900/60 p-10 rounded-[3rem] border border-white/5 space-y-8 shadow-2xl">
                 <h3 className="text-xl font-black flex items-center gap-4 text-blue-500 flex-row-reverse"><UserPlus size={28} /> הוספת שחקנים לליגות</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-                   <button onClick={() => { setPlayerModalTab('new'); setShowPlayerModal({show: true, league: 'premier'}); }} className="bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 p-8 rounded-[2rem] border border-blue-500/20 font-black text-sm flex flex-col items-center gap-4 transition-all active:scale-95"><Award size={32} /> <span>ליגת העל</span></button>
+                   <button onClick={() => { setPlayerModalTab('new'); setShowPlayerModal({show: true, league: 'premier'}); }} className="bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 p-8 rounded-[2rem] border border-blue-500/20 font-black text-sm flex flex-col items-center gap-4 transition-all active:scale-95"><Award size={32} /> <span>ליגת על</span></button>
                    <button onClick={() => { setPlayerModalTab('new'); setShowPlayerModal({show: true, league: 'national'}); }} className="bg-slate-800/50 hover:bg-slate-800 text-slate-400 p-8 rounded-[2rem] border border-white/5 font-black text-sm flex flex-col items-center gap-4 transition-all active:scale-95"><BarChart3 size={32} /> <span>הלאומית</span></button>
                    <div className="grid grid-cols-2 gap-2">
                       {safeClGroups.map((group) => (<button key={group.id} onClick={() => { setPlayerModalTab('new'); setShowPlayerModal({show: true, league: 'champions', groupId: group.id}); }} className="bg-blue-400/5 hover:bg-blue-400/10 text-blue-400 p-4 rounded-[1.5rem] border border-white/5 font-black text-[10px] flex flex-col items-center gap-1 transition-all active:scale-95"><Zap size={16} /><span>{group.name}</span></button>))}
@@ -609,7 +615,7 @@ const App: React.FC = () => {
 
              <div className="bg-slate-900/60 p-10 rounded-[3rem] border border-white/5 space-y-8 shadow-2xl">
                 <div className="flex flex-col md:flex-row-reverse justify-between items-center gap-4"><div className="text-right"><h3 className="text-xl font-black flex items-center gap-4 text-orange-500 flex-row-reverse"><Users size={28} /> ניהול שחקנים וליגות</h3></div><div className="relative w-full md:w-64"><Search className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500" size={14} /><input type="text" placeholder="חיפוש שחקן..." value={adminSearchQuery} onChange={(e) => setAdminSearchQuery(e.target.value)} className="w-full bg-black/40 border border-white/5 rounded-xl py-3 pr-10 pl-4 text-xs font-black outline-none focus:border-orange-500/50 text-white" /></div></div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">{safePlayers.filter(p => !adminSearchQuery || p.name.includes(adminSearchQuery)).map(p => (<div key={p.id} className="flex flex-col bg-black/40 rounded-2xl border border-white/5 overflow-hidden shadow-lg group"><div className="flex items-center gap-4 p-5"><div className="w-12 h-12 rounded-xl overflow-hidden bg-slate-800 shrink-0 border border-white/5 shadow-md group-hover:scale-105 transition-transform">{p.photoUrl ? <img src={p.photoUrl} className="w-full h-full object-cover" /> : <UserIcon size={20} className="m-auto mt-3 text-slate-600" />}</div><div className="flex-1 overflow-hidden text-right"><div className="font-black text-sm text-white">{p.name}</div><div className="text-[10px] text-slate-500 font-bold">{p.sonyUsername}</div></div><button onClick={() => setPlayerToDelete(p)} className="p-2 bg-red-600/10 rounded-lg hover:bg-red-600 hover:text-white transition-all text-red-600 shadow-sm"><Trash2 size={16} /></button></div><div className="px-5 pb-5 flex flex-wrap gap-2 justify-end">{(premierPlayerIds || []).includes(p.id) && (<button onClick={() => setPlayerToRemoveFromLeague({player: p, league: 'premier'})} className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-600/10 border border-blue-500/20 rounded-full text-[9px] font-black text-blue-500 hover:bg-red-600 hover:text-white hover:border-red-500 transition-all"><Award size={10} /> ליגת על <X size={10} /></button>)}{(nationalPlayerIds || []).includes(p.id) && (<button onClick={() => setPlayerToRemoveFromLeague({player: p, league: 'national'})} className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-800 border border-white/10 rounded-full text-[9px] font-black text-slate-400 hover:bg-red-600 hover:text-white hover:border-red-500 transition-all"><BarChart3 size={10} /> לאומית <X size={10} /></button>)}{safeClGroups.map(group => (group.playerIds || []).includes(p.id) && (<button key={group.id} onClick={() => setPlayerToRemoveFromLeague({player: p, league: 'champions', groupId: group.id})} className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-400/10 border border-blue-500/20 rounded-full text-[9px] font-black text-blue-400 hover:bg-red-600 hover:text-white hover:border-red-500 transition-all"><Zap size={10} /> {group.name} <X size={10} /></button>))}</div></div>))}</div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">{safePlayers.filter(p => p && (!adminSearchQuery || p.name.includes(adminSearchQuery))).map(p => (<div key={p.id} className="flex flex-col bg-black/40 rounded-2xl border border-white/5 overflow-hidden shadow-lg group"><div className="flex items-center gap-4 p-5"><div className="w-12 h-12 rounded-xl overflow-hidden bg-slate-800 shrink-0 border border-white/5 shadow-md group-hover:scale-105 transition-transform">{p.photoUrl ? <img src={p.photoUrl} className="w-full h-full object-cover" alt={p.name} /> : <UserIcon size={20} className="m-auto mt-3 text-slate-600" />}</div><div className="flex-1 overflow-hidden text-right"><div className="font-black text-sm text-white">{p.name}</div><div className="text-[10px] text-slate-500 font-bold">{p.sonyUsername}</div></div><button onClick={() => setPlayerToDelete(p)} className="p-2 bg-red-600/10 rounded-lg hover:bg-red-600 hover:text-white transition-all text-red-600 shadow-sm"><Trash2 size={16} /></button></div><div className="px-5 pb-5 flex flex-wrap gap-2 justify-end">{(premierPlayerIds || []).includes(p.id) && (<button onClick={() => setPlayerToRemoveFromLeague({player: p, league: 'premier'})} className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-600/10 border border-blue-500/20 rounded-full text-[9px] font-black text-blue-500 hover:bg-red-600 hover:text-white hover:border-red-500 transition-all"><Award size={10} /> ליגת על <X size={10} /></button>)}{(nationalPlayerIds || []).includes(p.id) && (<button onClick={() => setPlayerToRemoveFromLeague({player: p, league: 'national'})} className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-800 border border-white/10 rounded-full text-[9px] font-black text-slate-400 hover:bg-red-600 hover:text-white hover:border-red-500 transition-all"><BarChart3 size={10} /> לאומית <X size={10} /></button>)}{safeClGroups.map(group => group && (group.playerIds || []).includes(p.id) && (<button key={group.id} onClick={() => setPlayerToRemoveFromLeague({player: p, league: 'champions', groupId: group.id})} className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-400/10 border border-blue-500/20 rounded-full text-[9px] font-black text-blue-400 hover:bg-red-600 hover:text-white hover:border-red-500 transition-all"><Zap size={10} /> {group.name} <X size={10} /></button>))}</div></div>))}</div>
              </div>
           </section>
         )}
@@ -640,7 +646,7 @@ const App: React.FC = () => {
                  <div className="bg-slate-950 rounded-[3.2rem] p-12 flex flex-col items-center text-center space-y-6">
                     <div className="w-20 h-20 rounded-full bg-red-600/10 flex items-center justify-center border border-red-500/20"><AlertTriangle className="text-red-500" size={36} /></div>
                     <div className="text-right w-full"><h3 className="text-2xl font-black text-white italic">מחיקת היסטוריה</h3><p className="text-slate-400 text-xs font-bold mt-2">האם אתה בטוח שברצונך למחוק את הרשומות של עונת <span className="text-white">"{historyToDelete.seasonName}"</span>?</p></div>
-                    <div className="flex flex-col gap-3 w-full"><button onClick={() => { setHistory(prev => (prev || []).filter(h => h.id !== historyToDelete.id)); setHistoryToDelete(null); }} className="w-full py-5 bg-red-600 text-white rounded-[2rem] font-black text-xs shadow-xl active:scale-95">כן, מחק</button><button onClick={() => setHistoryToDelete(null)} className="w-full py-5 bg-slate-900 text-slate-500 rounded-[2rem] font-black text-xs border border-white/5 active:scale-95">ביטול</button></div>
+                    <div className="flex flex-col gap-3 w-full"><button onClick={() => { setHistory(prev => (prev || []).filter(h => h && h.id !== historyToDelete.id)); setHistoryToDelete(null); }} className="w-full py-5 bg-red-600 text-white rounded-[2rem] font-black text-xs shadow-xl active:scale-95">כן, מחק</button><button onClick={() => setHistoryToDelete(null)} className="w-full py-5 bg-slate-900 text-slate-500 rounded-[2rem] font-black text-xs border border-white/5 active:scale-95">ביטול</button></div>
                  </div>
               </div>
            </div>
@@ -672,9 +678,9 @@ const App: React.FC = () => {
                     <button onClick={() => setFixtureToUpdate(null)} className="absolute top-8 right-8 text-slate-500 hover:text-white"><X size={24} /></button>
                     <h3 className="text-2xl font-black mb-8 text-white italic tracking-tighter">עדכון תוצאת משחק</h3>
                     <div className="flex items-center justify-center gap-6 w-full mb-10">
-                       <div className="flex flex-col items-center gap-3 flex-1"><div className="w-16 h-16 rounded-2xl bg-slate-800 overflow-hidden border border-white/5">{safePlayers.find(p => p.id === fixtureToUpdate.homePlayerId)?.photoUrl ? <img src={safePlayers.find(p => p.id === fixtureToUpdate.homePlayerId)?.photoUrl} className="w-full h-full object-cover" /> : <UserIcon className="m-auto mt-4 text-slate-600" />}</div><span className="font-black text-[10px] text-slate-400 truncate w-24 text-center">{safePlayers.find(p => p.id === fixtureToUpdate.homePlayerId)?.name}</span><input type="number" value={updateScores.home} onChange={(e) => setUpdateScores(prev => ({ ...prev, home: e.target.value }))} className="w-20 bg-slate-900 border border-blue-500/30 rounded-2xl py-4 text-center text-3xl font-black text-white outline-none focus:border-blue-500" placeholder="0" /></div>
+                       <div className="flex flex-col items-center gap-3 flex-1"><div className="w-16 h-16 rounded-2xl bg-slate-800 overflow-hidden border border-white/5">{safePlayers.find(p => p.id === fixtureToUpdate.homePlayerId)?.photoUrl ? <img src={safePlayers.find(p => p.id === fixtureToUpdate.homePlayerId)?.photoUrl} className="w-full h-full object-cover" alt="home" /> : <UserIcon className="m-auto mt-4 text-slate-600" />}</div><span className="font-black text-[10px] text-slate-400 truncate w-24 text-center">{safePlayers.find(p => p.id === fixtureToUpdate.homePlayerId)?.name}</span><input type="number" value={updateScores.home} onChange={(e) => setUpdateScores(prev => ({ ...prev, home: e.target.value }))} className="w-20 bg-slate-900 border border-blue-500/30 rounded-2xl py-4 text-center text-3xl font-black text-white outline-none focus:border-blue-500" placeholder="0" /></div>
                        <div className="text-2xl font-black text-slate-700 mt-12">:</div>
-                       <div className="flex flex-col items-center gap-3 flex-1"><div className="w-16 h-16 rounded-2xl bg-slate-800 overflow-hidden border border-white/5">{safePlayers.find(p => p.id === fixtureToUpdate.awayPlayerId)?.photoUrl ? <img src={safePlayers.find(p => p.id === fixtureToUpdate.awayPlayerId)?.photoUrl} className="w-full h-full object-cover" /> : <UserIcon className="m-auto mt-4 text-slate-600" />}</div><span className="font-black text-[10px] text-slate-400 truncate w-24 text-center">{safePlayers.find(p => p.id === fixtureToUpdate.awayPlayerId)?.name}</span><input type="number" value={updateScores.away} onChange={(e) => setUpdateScores(prev => ({ ...prev, away: e.target.value }))} className="w-20 bg-slate-900 border border-blue-500/30 rounded-2xl py-4 text-center text-3xl font-black text-white outline-none focus:border-blue-500" placeholder="0" /></div>
+                       <div className="flex flex-col items-center gap-3 flex-1"><div className="w-16 h-16 rounded-2xl bg-slate-800 overflow-hidden border border-white/5">{safePlayers.find(p => p.id === fixtureToUpdate.awayPlayerId)?.photoUrl ? <img src={safePlayers.find(p => p.id === fixtureToUpdate.awayPlayerId)?.photoUrl} className="w-full h-full object-cover" alt="away" /> : <UserIcon className="m-auto mt-4 text-slate-600" />}</div><span className="font-black text-[10px] text-slate-400 truncate w-24 text-center">{safePlayers.find(p => p.id === fixtureToUpdate.awayPlayerId)?.name}</span><input type="number" value={updateScores.away} onChange={(e) => setUpdateScores(prev => ({ ...prev, away: e.target.value }))} className="w-20 bg-slate-900 border border-blue-500/30 rounded-2xl py-4 text-center text-3xl font-black text-white outline-none focus:border-blue-500" placeholder="0" /></div>
                     </div>
                     <button onClick={handleUpdateScoreSubmit} className="w-full py-5 bg-blue-600 text-white rounded-[2rem] font-black flex items-center justify-center gap-3 shadow-xl active:scale-95 transition-all"><Save size={18} />שמור תוצאה</button>
                  </div>
@@ -707,7 +713,7 @@ const App: React.FC = () => {
                  <div className="bg-slate-900 rounded-[2.8rem] p-8 flex flex-col items-center relative">
                     <button onClick={() => setSelectedPlayerInfo(null)} className="absolute top-6 right-6 text-slate-500 hover:text-white"><X size={20} /></button>
                     <div className="flex flex-col items-center gap-4 mb-8">
-                       <div className="w-24 h-24 rounded-[2rem] overflow-hidden border-2 border-slate-800 bg-slate-800 shadow-xl">{selectedPlayerInfo.photoUrl ? <img src={selectedPlayerInfo.photoUrl} className="w-full h-full object-cover" /> : <UserIcon size={32} className="m-auto mt-7 text-slate-700" />}</div>
+                       <div className="w-24 h-24 rounded-[2rem] overflow-hidden border-2 border-slate-800 bg-slate-800 shadow-xl">{selectedPlayerInfo.photoUrl ? <img src={selectedPlayerInfo.photoUrl} className="w-full h-full object-cover" alt={selectedPlayerInfo.name} /> : <UserIcon size={32} className="m-auto mt-7 text-slate-700" />}</div>
                        <div className="text-center">
                           <h3 className="text-2xl font-black text-white italic tracking-tighter mb-1">{selectedPlayerInfo.name}</h3>
                           <div className="flex items-center justify-center gap-2"><span className="text-[9px] text-blue-500 font-black uppercase tracking-widest bg-blue-500/5 px-3 py-1 rounded-full border border-blue-500/10">{selectedPlayerInfo.sonyUsername}</span></div>
@@ -749,7 +755,7 @@ const App: React.FC = () => {
                 {!showPlayerModal.player && (<div className="flex bg-black/40 p-1 rounded-2xl border border-white/5"><button onClick={() => setPlayerModalTab('new')} className={`flex-1 py-3 rounded-xl text-xs font-black transition-all ${playerModalTab === 'new' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500'}`}>שחקן חדש</button><button onClick={() => setPlayerModalTab('existing')} className={`flex-1 py-3 rounded-xl text-xs font-black transition-all ${playerModalTab === 'existing' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500'}`}>קיים במערכת</button></div>)}
                 {playerModalTab === 'new' || showPlayerModal.player ? (
                   <div className="space-y-5">
-                    <div className="flex flex-col items-center gap-4 mb-4"><label className="w-20 h-20 rounded-[1.5rem] bg-black/50 border-2 border-dashed border-white/10 flex flex-col items-center justify-center cursor-pointer hover:border-blue-500/50 transition-all overflow-hidden relative">{(tempUploadedPhoto || showPlayerModal.player?.photoUrl) ? <img src={tempUploadedPhoto || showPlayerModal.player?.photoUrl} className="w-full h-full object-cover" /> : <Plus className="text-slate-600" size={20} />}<input type="file" className="hidden" accept="image/*" onChange={(e) => { const f = e.target.files?.[0]; if(f) { const r = new FileReader(); r.onloadend = () => setTempUploadedPhoto(r.result as string); r.readAsDataURL(f); } }} /></label></div>
+                    <div className="flex flex-col items-center gap-4 mb-4"><label className="w-20 h-20 rounded-[1.5rem] bg-black/50 border-2 border-dashed border-white/10 flex flex-col items-center justify-center cursor-pointer hover:border-blue-500/50 transition-all overflow-hidden relative">{(tempUploadedPhoto || showPlayerModal.player?.photoUrl) ? <img src={tempUploadedPhoto || showPlayerModal.player?.photoUrl} className="w-full h-full object-cover" alt="temp" /> : <Plus className="text-slate-600" size={20} />}<input type="file" className="hidden" accept="image/*" onChange={(e) => { const f = e.target.files?.[0]; if(f) { const r = new FileReader(); r.onloadend = () => setTempUploadedPhoto(r.result as string); r.readAsDataURL(f); } }} /></label></div>
                     <div className="space-y-2"><label className="text-[10px] font-black text-slate-500 mr-2 uppercase">Full Name</label><input id="p-name" autoFocus placeholder="שם מלא" defaultValue={showPlayerModal.player?.name} className="w-full bg-black/50 border border-white/5 rounded-2xl p-5 font-black text-white text-right outline-none focus:border-blue-500" /></div>
                     <div className="space-y-2"><label className="text-[10px] font-black text-slate-500 mr-2 uppercase">Playstation ID</label><input id="p-sony" placeholder="PSN ID" defaultValue={showPlayerModal.player?.sonyUsername} className="w-full bg-black/50 border border-white/5 rounded-2xl p-5 font-black text-white text-right outline-none focus:border-blue-500" /></div>
                     <button onClick={() => { const n = (document.getElementById('p-name') as HTMLInputElement).value, s = (document.getElementById('p-sony') as HTMLInputElement).value; if(n) savePlayer({ name: n, sonyUsername: s, photoUrl: tempUploadedPhoto || showPlayerModal.player?.photoUrl || '' }, showPlayerModal.league, showPlayerModal.groupId); }} className="w-full bg-blue-600 text-white font-black py-5 rounded-[2rem] active:scale-95 transition-all shadow-xl mt-4">שמירה</button>
@@ -757,7 +763,7 @@ const App: React.FC = () => {
                 ) : (
                   <div className="space-y-5 text-right">
                     <div className="relative group"><Search className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-blue-500 transition-colors" size={16} /><input type="text" placeholder="חפש שחקן קיים..." value={existingPlayerSearch} onChange={(e) => setExistingPlayerSearch(e.target.value)} className="w-full bg-black/50 border border-white/5 rounded-2xl py-4 pr-11 pl-4 text-xs font-black text-white outline-none focus:border-blue-500/30 transition-all text-right" /></div>
-                    <div className="max-h-64 overflow-y-auto no-scrollbar space-y-2">{getPlayersNotInLeague(showPlayerModal.league!, showPlayerModal.groupId).filter(p => !existingPlayerSearch || p.name.includes(existingPlayerSearch)).map(p => (<button key={p.id} onClick={() => addExistingPlayerToLeague(p.id, showPlayerModal.league!, showPlayerModal.groupId)} className="w-full flex items-center gap-4 p-4 bg-white/5 hover:bg-white/10 rounded-2xl border border-white/5 transition-all text-right group"><div className="w-10 h-10 rounded-xl overflow-hidden bg-slate-800 shrink-0 shadow-lg">{p.photoUrl ? <img src={p.photoUrl} className="w-full h-full object-cover" /> : <UserIcon size={14} className="m-auto mt-3 text-slate-600" />}</div><div className="flex-1"><div className="font-black text-xs text-white group-hover:text-blue-400 transition-colors">{p.name}</div><div className="text-[9px] text-slate-500 font-bold">{p.sonyUsername}</div></div><div className="p-2 bg-blue-600/10 text-blue-500 rounded-lg group-hover:bg-blue-600 group-hover:text-white transition-all"><UserCheck size={16} /></div></button>))}</div>
+                    <div className="max-h-64 overflow-y-auto no-scrollbar space-y-2">{getPlayersNotInLeague(showPlayerModal.league!, showPlayerModal.groupId).filter(p => p && (!existingPlayerSearch || p.name.includes(existingPlayerSearch))).map(p => (<button key={p.id} onClick={() => addExistingPlayerToLeague(p.id, showPlayerModal.league!, showPlayerModal.groupId)} className="w-full flex items-center gap-4 p-4 bg-white/5 hover:bg-white/10 rounded-2xl border border-white/5 transition-all text-right group"><div className="w-10 h-10 rounded-xl overflow-hidden bg-slate-800 shrink-0 shadow-lg">{p.photoUrl ? <img src={p.photoUrl} className="w-full h-full object-cover" alt={p.name} /> : <UserIcon size={14} className="m-auto mt-3 text-slate-600" />}</div><div className="flex-1"><div className="font-black text-xs text-white group-hover:text-blue-400 transition-colors">{p.name}</div><div className="text-[9px] text-slate-500 font-bold">{p.sonyUsername}</div></div><div className="p-2 bg-blue-600/10 text-blue-500 rounded-lg group-hover:bg-blue-600 group-hover:text-white transition-all"><UserCheck size={16} /></div></button>))}</div>
                   </div>
                 )}
               </div>
@@ -771,7 +777,7 @@ const App: React.FC = () => {
            <div className="bg-slate-900 p-10 rounded-[3rem] border border-white/10 shadow-2xl relative w-full max-sm animate-in zoom-in-95 duration-300">
               <h2 className="text-2xl font-black mb-8 text-yellow-500 flex items-center gap-3 text-right flex-row-reverse"><Crown size={28} /> היכל התהילה</h2>
               <div className="space-y-5 text-right">
-                 <div className="space-y-2"><label className="text-[10px] font-black text-slate-500 mr-2 uppercase">Legend Name</label><input id="hof-player" placeholder="שם האגדה" className="w-full bg-black border border-white/5 rounded-2xl p-5 font-black text-white text-right outline-none focus:border-yellow-500" list="current-players" /><datalist id="current-players">{safePlayers.map(p => <option key={p.id} value={p.name} />)}</datalist></div>
+                 <div className="space-y-2"><label className="text-[10px] font-black text-slate-500 mr-2 uppercase">Legend Name</label><input id="hof-player" placeholder="שם האגדה" className="w-full bg-black border border-white/5 rounded-2xl p-5 font-black text-white text-right outline-none focus:border-yellow-500" list="current-players" /><datalist id="current-players">{safePlayers.map(p => p && <option key={p.id} value={p.name} />)}</datalist></div>
                  <div className="space-y-2"><label className="text-[10px] font-black text-slate-500 mr-2 uppercase">Achievement</label><input id="hof-ach" placeholder="הישג" className="w-full bg-black border border-white/5 rounded-2xl p-5 font-black text-white text-right outline-none focus:border-yellow-500" /></div>
                  <div className="space-y-2"><label className="text-[10px] font-black text-slate-500 mr-2 uppercase">Season</label><input id="hof-sea" placeholder="עונה" className="w-full bg-black border border-white/5 rounded-2xl p-5 font-black text-white text-right outline-none focus:border-yellow-500" /></div>
                  <button onClick={() => { const p = (document.getElementById('hof-player') as HTMLInputElement).value, a = (document.getElementById('hof-ach') as HTMLInputElement).value, s = (document.getElementById('hof-sea') as HTMLInputElement).value; if(p && a && s) { setHallOfFame(prev => [{ id: Date.now().toString(), playerName: p, achievement: a, season: s, date: new Date().toISOString() }, ...(prev || [])]); setShowHOFModal(false); } }} className="w-full bg-yellow-600 text-black font-black py-5 rounded-[2rem] active:scale-95 transition-all shadow-xl mt-4">הוסף הישג</button>
